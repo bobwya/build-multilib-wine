@@ -1,6 +1,8 @@
-# Ubuntu Wine/Wine-Staging Build Script (build-multilib-wine)
+## Ubuntu Wine/Wine-Staging Build Script (build-multilib-wine)
 
-## Discussion
+
+###  Discussion
+
 
 Monolithic BASH script to build multilib Wine / Wine-Staging, from source, on Ubuntu(tm) - using dual Chroot Environments.
 
@@ -24,7 +26,9 @@ As Ubuntu(tm) has removed the necesary 32-bit development libraries, from the 64
 4. **build multilib Wine on 64-bit Ubuntu(tm) using a Virtual Machine with a 32-bit Ubuntu(tm) image (VM - e.g. VirtualBox)**
   * Overhead (CPU), hard to link the 32-bit Wine build to the native 64-bit Wine build, disk usage hog, not a very practical solution!
 
-## Usage
+
+###  Usage
+
 
 Install the script in your user's PATH.
 The script has a detailed help page with the all the supported options:
@@ -45,7 +49,9 @@ User patches can applied (specified by directory or directories). Thereby allowi
 At present the build script carefully installs **all** necessary development libraries to build Wine or Wine-Staging from Source. But these libraries are only installed in the Chroot Environments.
 There is no attempt to install necessary runtime dependencies (mainly 32-bit libaries) on the Host Ubuntu(tm) System. This will be added in at a later stage (perhaps a small helper script). This isn't a package builder! So it's recommended to install one the WineHQ official packages (**winehq-devel** or **winehq-staging**) alongside your usage of this script... These packages will pull in the necessary runtime library dependencies, plus install package icons and desktop files.
 
-## Usage
+
+###  I'm a stupid
+
 
 I should point out I'm firmly in the Gentoo camp... So bear that in mind if the script makes some misassumptions about the Debian Schroot utility or Debian package management! Pull requests happily received!
 
