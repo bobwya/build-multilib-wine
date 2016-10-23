@@ -85,7 +85,7 @@ function die ()
 	local function_call="${FUNCNAME[ 1 ]:-main}"
 	local error_message="${1}"
 	
-	printf "${TTYRESET}" &>"${FIFO_LOG_PIPE}"
+	[[ -p "${FIFO_LOG_PIPE}" ]] && printf "${TTYRESET}" &>"${FIFO_LOG_PIPE}"
 	printf "${1}" | awk -vttycyan_bold="${TTYCYAN_BOLD}" -vttyred_bold="${TTYRED_BOLD}" -vttypurple_bold="${TTYPURPLE_BOLD}" \
 						-vttygreen_bold="${TTYGREEN_BOLD}" -vttyreset="${TTYRESET}" \
 						-vscript_name="${SCRIPT_NAME}" -vfunction_call="${function_call}"	-F'"' \
@@ -324,11 +324,20 @@ check_package_dependencies ()
 	done
 
 	if [[ ! -z "${package_list}" ]]; then
-		printf "sudo apt-get install ${package_list}\n" >&2
+		printf "sudo apt-get install %s${package_list}%s\n" "${TTYCYAN}" "${TTYRESET}" >&2
 	elif ! which netselect &>/dev/null; then
 		package_list="${package_list} netselect"
-		printf "Use %sdkpg%s to install the Debian %snetselect%s package from: %shttps://packages.debian.org/jessie/amd64/netselect/download%s\n" \
-				"${TTYGREEN_BOLD}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYBLUE_BOLD}" "${TTYRESET}" >&2
+		printf "Please manually install the %snetselect%s package from this Debian repository:\n" \
+				"${TTYCYAN_BOLD}" "${TTYRESET}" >&2
+		printf "  %shttps://packages.debian.org/jessie/amd64/netselect/download%s\n\n" \
+				"${TTYBLUE_BOLD}" "${TTYRESET}" >&2
+		printf "For example to install the %snetselect%s %sdeb%s package file from the main Debian USA mirror use:\n" \
+				"${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYRESET}" >&2
+		printf "  URL='%shttp://ftp.us.debian.org/debian/pool/main/n/netselect/netselect_0.3.ds1-26_amd64.deb%s' %s;%s\n" \
+				"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" >&2
+		printf "  FILE=\$(%smktemp%s) %s;%s %swget%s \"\${URL}\" -qO \"\${FILE}\" && %ssudo dpkg%s -i \"\${FILE}\" %s;%s %srm%s \"\${FILE}\"\n\n" \
+				"${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" \
+				"${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" >&2
 	fi
 	[[ -z "${package_list}" ]] || die "please install the (above) required packages and re-run this script"
 }
@@ -1165,7 +1174,7 @@ function execute_commands ()
 					cleanup die get_ubuntu_mirror bootstrap_schroot_image \
 					setup_chroot_build_env upgrade_chroot_build_env
 		su -p -c '
-			printf "\n${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with lowest ping)${TTYRESET} ...\n" &>"${FIFO_LOG_PIPE}"
+			printf "\n${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ...\n" &>"${FIFO_LOG_PIPE}"
 			declare		UBUNTU_MIRROR_URI
 			UBUNTU_MIRROR_URI="$(get_ubuntu_mirror)"
 			printf "\n${TTYWHITE_BOLD}Creating 32-bit Chroot Environment${TTYRESET} ...\n" &>"${FIFO_LOG_PIPE}"
@@ -1235,11 +1244,10 @@ renice +19 -p $$ &>/dev/null
 # Cleanup after ourselves with function cleanup ()
 trap "trap_exit" ABRT INT QUIT KILL TERM
 
-check_package_dependencies
-
 # Process script parameters: options and commands
 set_wine_version "master" false
 process_command	"${@}"
+check_package_dependencies
 execute_commands
 
 display_completion_message
