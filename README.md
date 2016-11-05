@@ -26,6 +26,8 @@ As Ubuntu(tm) has removed the necesary 32-bit development libraries, from the 64
 4. **build multilib Wine on 64-bit Ubuntu(tm) using a Virtual Machine with a 32-bit Ubuntu(tm) image (VM - e.g. VirtualBox)**
   * Overhead (CPU), hard to link the 32-bit Wine build to the native 64-bit Wine build, disk usage hog, not a very practical solution!
 
+Also see: https://wiki.winehq.org/Building_Wine
+
 ###  Downloading
 
 If you chose to download the build-multilib-wine script directly from Github (rather than cloning the Git repository)... When viewing the script file ensure you click the **RAW** button at the top of the file... Otherwise when you save the webpage, with your Web Browser, you will literally download that **html** Github webpage and not the bare **BASH script**, text file!
