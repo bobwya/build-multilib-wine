@@ -61,5 +61,5 @@ There is no attempt to install necessary runtime dependencies (mainly 32-bit lib
 ###  I'm a stupid
 
 
-I should point out I'm a Gentoo user - not an Ubuntu user... So bear that in mind if the script makes some misassumptions about the Debian Schroot utility or Debian package management! Pull requests happily received!
+I should point out I'm a Gentoo user - only an occasional Ubuntu user... So bear that in mind if the script makes some misassumptions about the Debian Schroot utility or Debian package management! Pull requests happily received!
 
