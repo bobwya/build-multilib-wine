@@ -60,6 +60,9 @@ function die ()
 			}
 			printf("\n")
 		}' >&2
+        if [[ "${usage}" == true ]]; then
+            usage_information
+        fi
 	cleanup
 	exit "${error_code}"
 }
@@ -258,11 +261,15 @@ function setup_logging ()
 		esac
 		[[ -d "${LOG_DIRECTORY}" ]] || mkdir -p "${LOG_DIRECTORY}" &>/dev/null
 		rm "${LOG}" &>/dev/null
+		printf "${TTYCYAN_BOLD}Finished setting up FIFO logging using: %s${TTYRESET}\n" "${TTYBLUE_BOLD}${LOG}${TTYRESET}"
+	else
+		printf "${TTYCYAN_BOLD}Logging disabled\n${TTYRESET}"
 	fi
+	
 	(
 		trap "cleanup" ABRT INT QUIT KILL TERM
 		while [[ -p "${__FIFO_LOG_PIPE}" ]]; do
-			if [[ "${logging}" == true ]]; then
+			if [[ "${LOGGING}" == true ]]; then
 				cat < "${__FIFO_LOG_PIPE}" | tee -a "${LOG}"
 			else
 				cat < "${__FIFO_LOG_PIPE}"
@@ -386,9 +393,9 @@ function usage_information ()
 	printf "%*s%s%*s%s%*s%s\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "will be executed in a chain." >&2
 	printf "%*s%s%*s%s%*s%s\n" \
-		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Note: multiple phases can be specified" >&2
+		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Note: multiple phases can also be specified" >&2
 	printf "%*s%s%*s%s%*s%s\n" \
-		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "individually and will be chained together." >&2
+		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "individually and these will be chained together." >&2
 	printf "%sGLOBAL-OPTION%s :\n" "${TTYGREEN}" "${TTYRESET}" >&2
 	printf "\n" >&2
 	printf "%*s%s%*s%s%*s%s\n" \
@@ -490,8 +497,23 @@ function create_main_directories ()
 	for i in ${!directories_array[*]}; do
 		[[ -d "${directories_array[i]}" ]] || continue
 
-		mkdir -p "${directories_array[i]}" &>"${__FIFO_LOG_PIPE}" || die "mkdir -p \"${directories_array[i]}\" failed"
+		mkdir -p "${directories_array[i]}" &>"${__FIFO_LOG_PIPE}" \
+			|| die "mkdir -p \"${directories_array[i]}\" failed"
 	done
+}
+
+# clean_source_directories ()
+#   1...N>  : array of source directories to wipe
+clean_source_directories ()
+{
+	local -a directories_array=( "${@}" )
+	local i
+	for i in ${!directories_array[*]}; do
+		[[ -d "${directories_array[i]}" ]] || continue
+
+		rm -rf "${directories_array[i]}" &>"${__FIFO_LOG_PIPE}" \
+				|| die "rm -rf \"${directories_array[i]}\" failed"
+	done	
 }
 
 # clean_build_directories ()
@@ -501,10 +523,13 @@ clean_build_directories ()
 	local -a directories_array=( "${@}" )
 	local i
 	for i in ${!directories_array[*]}; do
-		[[ -d "${directories_array[i]}" ]] || continue
-
-		rm -rf "${directories_array[i]}"/* &>"${__FIFO_LOG_PIPE}" \
-			|| die "rm -rf \"${directories_array[i]}\"/* failed"
+		if [[ -d "${directories_array[i]}" ]]; then
+			rm -rf "${directories_array[i]}"/* &>"${__FIFO_LOG_PIPE}" \
+				|| die "rm -rf \"${directories_array[i]}\"/* failed"
+		else
+			mkdir -p "${directories_array[i]}" \
+				|| die "mkdir -p \"${directories_array[i]}\" failed"
+		fi
 	done	
 }
 
@@ -515,12 +540,14 @@ function git_clone ()
 {
 	local git_directory="${SOURCE_ROOT}/${1}"
 	local git_repository_url="${@: -1:1}"
+
 	if (($# == 1)); then
 		git_directory="${git_repository_url##*/}"
 		git_directory="${SOURCE_ROOT}/${git_directory%.*}"
 	fi
 	[[ -d "${git_directory}/.git" ]] && return 0
 
+	printf "${TTYCYAN_BOLD}Cloning \"${TTYBLUE_BOLD}${git_repository_url}${TTYRESET}\" into ${TTYBLUE_BOLD}${git_directory}${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
 	git clone "${git_repository_url}" &>"${__FIFO_LOG_PIPE}" \
 		|| die "git clone \"${git_repository_url}\" failed (\"${1}\")" $?
 }
@@ -619,18 +646,37 @@ function process_staging_exclude ()
 {
 	local __staging_exclude="${1}"
 	local __staging_exclude_retvar="${2}"
+	local __staging_patch_file="patches/patchinstall.sh"
 
-	local __processed_staging_exclude=$( echo "${__staging_exclude}" | awk ' \
-		{
-			for (i=1;i<=NF;++i)
+	local __processed_staging_exclude=$( echo "${__staging_exclude}" |	\
+		awk -vstaging_patch_file="${__staging_patch_file}" 				\
+		'
+			function check_patchset_support(patchset)
 			{
-				i += ($i=="-W") ? 1 : 0
-				printf("-W %s ", $i)
+				gsub("(\\.|\\-|\\_)", "\\\\&", patchset)
+				while ((getline line < staging_patch_file) > 0)
+				{
+					if (line ~ (patchset "\\)"))
+					{
+						found=1
+						break
+					}
+				}
+				close (staging_patch_file)
+				return (found)
 			}
-		}
-		END{
-			printf("\n")
-		}'
+
+			{
+				for (i=1;i<=NF;++i)
+				{
+					i += ($i=="-W") ? 1 : 0
+					if (check_patchset_support($i))
+						printf("-W %s ", $i)
+				}
+			}
+			END{
+				printf("\n")
+			}' 2>/dev/null
 	)
 
 	if [[ -z "${__staging_exclude_retvar}" ]]; then
@@ -760,6 +806,7 @@ function schroot_session_start ()
 			user="${2}" \
 			chroot="chroot:${3#chroot:}"
 
+	schroot -e -c "session:${session}" &>/dev/null
 	printf "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
 	schroot -b -c "${chroot}" -u "${user}" -n "${session}" &>"${__FIFO_LOG_PIPE}"
 	(($?==0)) || die "schroot -b -c \"${chroot}\" -u \"${user}\" -n \"${session}\" (session start) failed"
@@ -833,7 +880,7 @@ EOF_Schroot_wine64
 	esac
 	(
 		cat <<EOF_Schroot_wine
-directory=/srv/chroot/${chroot_name}
+directory=${chroot_path}
 message-verbosity=verbose
 root-users=root
 type=directory
@@ -845,11 +892,15 @@ EOF_Schroot_wine
 	for path in /etc/{locale.gen,timezone} /etc/default/{console-setup,keyboard,locale}; do
 		# Append host locale & keyboard default configuration files to schroot copyfiles configuration file.
 		# sed command only appends file names - if not already present.
-		sed -i -e "\|${path}|h; \${x;s|${path}||;{g;t};a\\" -e "${path}" -e "}" "/etc/schroot/default/copyfiles"
+		if [[ -f "${path}" ]]; then
+			sed -i -e "\|${path}|h; \${x;s|${path}||;{g;t};a\\" -e "${path}" -e "}" "/etc/schroot/default/copyfiles"
+		else
+			sed -i "\|${path}|d" "/etc/schroot/default/copyfiles"
+		fi
 	done
 	printf "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
 	debootstrap --variant=buildd --arch=${architecture} ${LSB_CODENAME} \
-			"/srv/chroot/${chroot_name}" "${UBUNTU_MIRROR_URI}" &>"${__FIFO_LOG_PIPE}"
+			"${chroot_path}" "${UBUNTU_MIRROR_URI}" &>"${__FIFO_LOG_PIPE}"
 	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
@@ -858,15 +909,25 @@ EOF_Schroot_wine
 setup_chroot_build_env ()
 {
 	local -r	chroot_name="${1}"
-	local -r	session="${SESSION_WINE_INITIALISE}"
+	local      	session="${SESSION_WINE_INITIALISE}"
 	local -r	session_directory="/var/lib/schroot/session/"
 	local -r	locale_lang="$( locale | awk -F'=' '$1=="LANG" { print $2 }' )"
 	local -r	chroot_path="/srv/chroot/${chroot_name}"
 	
 	[[ -d "${session_directory}" ]] || mkdir -p "${session_directory}"
+	if [[ ! -f "${chroot_path}/etc/locale.gen" ]]; then
+		# Generate a dummy /etc/locale.gen file for Schroot (as host system does not have a candidate file)
+		grep "${locale_lang}" "${chroot_path}/usr/share/i18n/SUPPORTED" > "${chroot_path}/etc/locale.gen"
+		printf "en_US.UTF-8 UTF-8\n" >> "${chroot_path}/etc/locale.gen"
+	else
+		# Set valid locales in /etc/locale.gen file for Schroot (as host system does not have a candidate file)
+		sed -i -e "\|${locale_lang}|{s|^\#[[:blank:]]\+||}" -e "\|en_US.UTF-8|{s|^\#[[:blank:]]\+||}" \
+			"${chroot_path}/etc/locale.gen"
+	fi
 	schroot_session_start "${session}" "root" "${chroot_name}"
 	rm "${chroot_path}"/etc/{protocols,services} &>/dev/null
 	schroot_session_run "${session}" "root" "/" \
+		"locale-gen" \
 		"apt-get install -q=2 ubuntu-minimal software-properties-common" \
 		"dpkg-reconfigure --frontend=noninteractive locales" \
 		"update-locale LANG=${locale_lang}"
@@ -883,7 +944,7 @@ setup_chroot_build_env ()
 upgrade_chroot_build_env ()
 {
 	local -r	chroot_name="${1}"
-	local -r	session="${SESSION_WINE_INITIALISE}"
+	local      	session="${SESSION_WINE_INITIALISE}"
 	local -r	chroot_path="/srv/chroot/${chroot_name}"
 	
 	sed -i	-e 's/^#[[:blank:]]*deb-src[[:blank:]]\+/deb-src /g' \
@@ -904,10 +965,9 @@ upgrade_chroot_build_env ()
 # src_fetch ()
 function src_fetch ()
 {
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYGREEN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 	
-	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools" \
-							"${SOURCE_ROOT}/wine" "${SOURCE_ROOT}/wine-staging"
+	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
 	# Fetch Wine-Staging Git Source (if required).
 	# Checkout desired Wine version in Wine-Staging Git tree (clean and update first!!)
@@ -929,7 +989,7 @@ function src_fetch ()
 # src_prepare ()
 function src_prepare ()
 {
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYGREEN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	local	wine_regex="{s/[^[:blank:]]$/& /;s/([[:xdigit:]]{40}|$)/${__WINE_COMMIT}/}"	
 	local	md5hash="$(md5sum "${SOURCE_ROOT}/wine/server/protocol.def" || die "md5sum failed")"
@@ -940,6 +1000,7 @@ function src_prepare ()
 					"${SCRIPT_DIRECTORY}/Patches/wine-1.6-memset-O3.patch"
 					"${SCRIPT_DIRECTORY}/Patches/wine-1.7.12-osmesa-check.patch"
 					"${SCRIPT_DIRECTORY}/Patches/wine_winecfg_detailed_version.patch"
+					"${SCRIPT_DIRECTORY}/Patches/wine-winhlp32-macro-flex-2.6.3-flex.patch"
 				)
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[123](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-2])$ ]]; then
 		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-1.8-gnutls-3.5-compat.patch" )
@@ -954,7 +1015,7 @@ function src_prepare ()
 		wget -c "${GSTREAMER_PATCH_URL}" &>"${__FIFO_LOG_PIPE}" || die "wget -c \"${GSTREAMER_PATCH_URL}\" failed"
 		bunzip2 -fq "${__GSTREAMER10_PATCH}.patch.bz2"  &>"${__FIFO_LOG_PIPE}" || die "bunzip2 -fq \"${__GSTREAMER10_PATCH}.patch.bz2\" failed"
 		if [[ "${__WINE_VERSION}" == "1.9.1" ]]; then
-			sed -i -e '1,71d' "${__GSTREAMER10_PATCH}.patch" &>"${__FIFO_LOG_PIPE}" || die "sed failed"
+			sed -i '1,71d' "${__GSTREAMER10_PATCH}.patch" &>"${__FIFO_LOG_PIPE}" || die "sed failed"
 		fi
 		popd_wrapper
 		array_patch_files+=( "${WORKING_PATCHES_DIRECTORY}/${__GSTREAMER10_PATCH}.patch")
@@ -965,8 +1026,15 @@ function src_prepare ()
 	if [[ "${WINE_STAGING}" == true && -d "${SOURCE_ROOT}/wine-staging" ]]; then
 		(
 			local	staging_exclude
-			process_staging_exclude "${WINE_STAGING_EXCLUDE}" "staging_exclude"
+
 			pushd_wrapper "${SOURCE_ROOT}/wine-staging"
+			WINE_STAGING_EXCLUDE="${WINE_STAGING_EXCLUDE} winhlp32-Flex_Workaround"
+			process_staging_exclude "${WINE_STAGING_EXCLUDE}" "staging_exclude"
+			# Disable Upstream (Wine Staging) about tab customisation, for winecfg utility, to support our own version
+			if [[ -f "patches/winecfg-Staging/0001-winecfg-Add-staging-tab-for-CSMT.patch" ]]; then
+				sed -i '\|^diff \-\-git a/programs/winecfg/about.c|,+12d' \
+					"patches/winecfg-Staging/0001-winecfg-Add-staging-tab-for-CSMT.patch" &>/dev/null
+			fi
 			printf "%sApplying Wine-Staging patchset %s...\n%spatchinstall.sh %sDESTDIR=\"%s${SOURCE_ROOT}/wine%s\" --no-autoconf --all ${staging_exclude}%s\n" \
 					"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN}" &>"${__FIFO_LOG_PIPE}"
 			patches/patchinstall.sh DESTDIR="${SOURCE_ROOT}/wine" --no-autoconf --all ${staging_exclude} &>"${__FIFO_LOG_PIPE}" \
@@ -976,15 +1044,15 @@ function src_prepare ()
 		)
 		if [[ "${WINE_STAGING_VERSION}" =~ ${VERSION_REGEXP} && "${WINE_STAGING_VERSION}" =~ ${STABLE_VERSION_REGEXP} ]]; then
 			# Handle "unofficial" stable Staging versions
-			sed -i -e "s/(Staging)/(Staging${WINE_STAGING_SUFFIX})/" "${SOURCE_ROOT}/wine/libs/wine/Makefile.in" || die "sed failed" $?
+			sed -i "s/(Staging)/(Staging${WINE_STAGING_SUFFIX})/" "${SOURCE_ROOT}/wine/libs/wine/Makefile.in" || die "sed failed" $?
 		fi
 		# Update Wine package name for Staging patchset
- 		sed -r -i -e '/^AC_INIT\(.*\)$/{s/\[Wine\]/\[Wine \(Staging\)\]/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
-		sed -r -i -e "s/Wine (\\(Staging\\) |)/Wine \\(Staging\\) /" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
+ 		sed -r -i '/^AC_INIT\(.*\)$/{s/\[Wine\]/\[Wine \(Staging\)\]/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
+		sed -r -i "s/Wine (\\(Staging\\) |)/Wine \\(Staging\\) /" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
 	fi
 	# Update Wine version to include git commit
-	sed -r -i -e '/^m4_define\(WINE_VERSION.+\)$/{s/\\\(\[\-\.0\-9A\-Za\-z]\+\\\)/\\([-.0-9A-Za-z ]+\\)/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
-	sed -r -i -e "{s/\\-[[:xdigit:]]{40}//; s/[[:blank:]]*$/ ${__WINE_COMMIT}/}" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
+	sed -r -i '/^m4_define\(WINE_VERSION.+\)$/{s/\\\(\[\-\.0\-9A\-Za\-z]\+\\\)/\\([-.0-9A-Za-z ]+\\)/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
+	sed -r -i "{s/\\-[[:xdigit:]]{40}//; s/[[:blank:]]*$/ ${__WINE_COMMIT}/}" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
 
 	# (3) Apply user patches. Stored in directories specified in the USER_PATCH_DIRECTORIES[0...N-1] directories array ...
 	apply_user_patches "wine"
@@ -1003,7 +1071,7 @@ function src_prepare ()
 # multilib_src_configure ()
 function multilib_src_configure ()
 {
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYGREEN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	export	CFLAGS="${WINE_CFLAGS}"
 
@@ -1027,7 +1095,7 @@ function multilib_src_configure ()
 # multilib_src_compile ()
 function multilib_src_compile ()
 {
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYGREEN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	# Build 64-bit wine64
 	pushd_wrapper "${BUILD_ROOT}/wine64"
@@ -1054,7 +1122,7 @@ function multilib_src_compile ()
 # multilib_src_install ()
 function multilib_src_install ()
 {
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYGREEN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	# Install Wine (32-bit) binaries in specified PREFIX path
 	pushd_wrapper "${BUILD_ROOT}/wine32"
@@ -1524,7 +1592,6 @@ EOF_script_config
 				"${TTYCYAN}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}"
 		;;			
 	build)
-		(( EUID == 0 )) && die "do not run this script as root, when building Wine!!"
 		setup_logging "${COMMAND}"
 		create_main_directories "${SOURCE_ROOT}" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools" "${BUILD_ROOT}/wine64" 
 		if [[ "${SUBCOMMANDS[SRC_CONFIGURE]}" == true || "${SUBCOMMANDS[SRC_COMPILE]}" == true || "${SUBCOMMANDS[SRC_INSTALL]}" == true ]]; then
@@ -1576,7 +1643,12 @@ function main ()
 	declare		COLOUR="${COLOUR:-false}"
 	parse_boolean_option "${COLOUR}" "COLOUR"
 	setup_tty_colours ${COLOUR}
-
+	if (( EUID == 0 )); then
+            die "do not run this script as root - you will asked for full root prvileges as required!!"
+        else
+            printf "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}...\n"
+        fi
+        
 	# Global versioning defaults
 	declare		WINE_STAGING="${WINE_STAGING:-false}"
 	declare		__WINE_COMMIT	__WINE_STAGING_COMMIT
