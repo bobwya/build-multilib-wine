@@ -4,7 +4,7 @@
 ###  Discussion
 
 
-Monolithic BASH script to build multilib Wine / Wine-Staging, from source, on Ubuntu(tm) - using dual Chroot Environments.
+Monolithic BASH script to build multilib Wine / Wine-Staging, from source, on Ubuntu(tm) - using dual Chroot Environments. Ubuntu 16.04 Xenial (or newer) is a hard requirement for the Chroot Environments.
 
 The Ubuntu(tm) / Debian distributions have chosen to remove most of the i386 multilib development libraries from their 64-bit repositories (post the Ubuntu 10.04 release?) Wine requires a complete multilib build/development environment to be built from Source. The vast majority of Windows binaries are still 32-bit (including all legacy applications).
 
