@@ -561,7 +561,7 @@ function git_pull_and_checkout ()
 	local git_version="${2}"
 
 	pushd_wrapper "${git_directory}"
-	git clean -f &>"${__FIFO_LOG_PIPE}" || die "git clean -f failed (\"${1}\")" $?
+	git clean -f -d -q &>"${__FIFO_LOG_PIPE}" || die "git clean -f -d -q failed (\"${1}\")" $?
 	git reset --hard "master" &>"${__FIFO_LOG_PIPE}"  || die "git reset --hard \"master\" failed (\"${1}\")" $?
 	git checkout "master" &>"${__FIFO_LOG_PIPE}" || die "git checkout \"master\" failed (\"${1}\")" $?
 	git pull &>"${__FIFO_LOG_PIPE}" || die "git pull failed (\"${1}\")" $?
@@ -648,10 +648,11 @@ function process_staging_exclude ()
 	local __staging_exclude_retvar="${2}"
 	local __staging_patch_file="patches/patchinstall.sh"
 
-	local __processed_staging_exclude=$( echo "${__staging_exclude}" |	\
+	local __processed_staging_exclude=$( printf "${__staging_exclude}" |	\
 		awk -vstaging_patch_file="${__staging_patch_file}" 				\
 		'
-			function check_patchset_support(patchset)
+			function check_patchset_support(patchset,
+				found)
 			{
 				gsub("(\\.|\\-|\\_)", "\\\\&", patchset)
 				while ((getline line < staging_patch_file) > 0)
@@ -678,7 +679,7 @@ function process_staging_exclude ()
 				printf("\n")
 			}' 2>/dev/null
 	)
-
+	
 	if [[ -z "${__staging_exclude_retvar}" ]]; then
 		echo "${__processed_staging_exclude}"
 	else
@@ -1007,6 +1008,9 @@ function src_prepare ()
 	fi
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[12](\-unofficial|)|1\.9\.[0-8])$ ]]; then
 		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-sysmacros.patch" )
+	fi
+	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[1-3](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-3])$ ]]; then
+		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-cups-2.2-cupsgetppd-build-fix.patch" )
 	fi
 	mkdir -p "${WORKING_PATCHES_DIRECTORY}"	
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\..*|1\.9\.[01])$ ]]; then
