@@ -3,48 +3,51 @@
 
 #### General Helper Functions Definition Block ####
 
-# cleanup ()
-function cleanup ()
+# cleanup()
+function cleanup()
 {
+	local PGID
+
 	sleep 1
 	if [[ -p "${__FIFO_LOG_PIPE}" ]]; then
 		rm "${__FIFO_LOG_PIPE}" &>/dev/null
 	fi
-	if [[ ! -z "${__LOGGING_PID}" ]]; then
-		kill -9 ${__LOGGING_PID} &>/dev/null
-	fi
 	schroot -e -c "${SESSION_WINE_INITIALISE}" &>/dev/null
 	schroot -e -c "${SESSION_WINE32}" &>/dev/null
 	schroot -e -c "${SESSION_WINE64}" &>/dev/null
-	[[ "${LOGGING}" == false || -z "${COMPRESSOR_CMD}" || -z "${LOG}" || ! -f "${LOG}" ]] \
-		&& return 0
-
-	${COMPRESSOR_CMD} "${LOG}"
+	if ((LOGGING)) && [[ ! -z "${COMPRESSOR_CMD}" && ! -z "${LOG}" && -f "${LOG}" ]]; then
+        ${COMPRESSOR_CMD} "${LOG}"
+    fi
+    PGID="$( ps -o pgid "${SCRIPT_PID}" | awk '{ if ($1 ~ /[[:digit:]]+/) print $1 }' )"
+    kill -9 -"${PGID}" &>/dev/null
 }
 
-# trap_exit ()
-function trap_exit ()
+# trap_exit()
+function trap_exit()
 {
-	trap '' ABRT INT QUIT KILL TERM
+	# shellcheck disable=SC2173
+	trap '' ABRT INT QUIT TERM KILL STOP
 	printf "\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYRED_BOLD}" "${TTYRESET}"
 	cleanup
 	exit
 }
 
-# die ()
+# die()
 #   1>  : Error Message
 #   2>  : Error Code (default: 1)
-#	3>  : Display usage (default: false)
-function die ()
+#	3>  : Display usage (default: 0)
+function die()
 {
 	local error_message="${1}"
 	local error_code=${2:-1}
-	local usage=${3:-false}
+	local usage=${3:-0}
 	local function_call="${FUNCNAME[ 1 ]}"
 
-	trap '' ABRT INT QUIT KILL TERM
-	[[ -p "${__FIFO_LOG_PIPE}" ]] && printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
-	printf "${1}" | awk -vttycyan_bold="${TTYCYAN_BOLD}" -vttyred_bold="${TTYRED_BOLD}" -vttypurple_bold="${TTYPURPLE_BOLD}" \
+	# shellcheck disable=SC2173
+	trap '' ABRT INT QUIT TERM KILL STOP
+	[[ -p "${__FIFO_LOG_PIPE}" ]] && printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${error_message}" | awk \
+						-vttycyan_bold="${TTYCYAN_BOLD}" -vttyred_bold="${TTYRED_BOLD}" -vttypurple_bold="${TTYPURPLE_BOLD}" \
 						-vttygreen_bold="${TTYGREEN_BOLD}" -vttyreset="${TTYRESET}" \
 						-vscript_name="${SCRIPT_NAME}" -vfunction_call="${function_call}"	-F'"' \
 		'BEGIN{
@@ -60,100 +63,134 @@ function die ()
 			}
 			printf("\n")
 		}' >&2
-        if [[ "${usage}" == true ]]; then
-            usage_information
-        fi
+		((usage)) 	&& usage_information
 	cleanup
 	exit "${error_code}"
 }
 
-# setup_tty_colours ()
-#  >1  Enable colour support for console (TRUE/FALSE)
-function setup_tty_colours ()
+# setup_tty_colours()
+#  >1  Enable colour support for console (1/0)
+function setup_tty_colours()
 {
-	local output="/dev/null"
-	[[ "${1}" == true ]] &&	output="/dev/stdout"
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
 
-	export	TTYRED="$( tput setaf 1 >${output} )"
-	export	TTYGREEN="$( tput setaf 2 >${output} )"
-	export	TTYYELLOW="$( tput setaf 3 >${output} )"
-	export	TTYBLUE="$( tput setaf 4 >${output} )"
-	export	TTYPURPLE="$( tput setaf 5 >${output} )"
-	export	TTYCYAN="$( tput setaf 6 >${output} )"
-	export	TTYWHITE="$( tput setaf 7 >${output} )"
-	export	TTYBOLD="$( tput bold >${output} )"
-	export	TTYRESET="$( tput sgr0 >${output} )"
-	export	TTYRED_BOLD="${TTYRED}${TTYBOLD}"
-	export	TTYGREEN_BOLD="${TTYGREEN}${TTYBOLD}"
-	export	TTYYELLOW_BOLD="${TTYYELLOW}${TTYBOLD}"
-	export	TTYBLUE_BOLD="${TTYBLUE}${TTYBOLD}"
-	export	TTYPURPLE_BOLD="${TTYPURPLE}${TTYBOLD}"
-	export	TTYCYAN_BOLD="${TTYCYAN}${TTYBOLD}"
-	export	TTYWHITE_BOLD="${TTYWHITE}${TTYBOLD}"
+	local enable_colour="${1}" output
+	if ((enable_colour)); then
+		output="/dev/stdout"
+	else
+		output="/dev/null"
+	fi
+
+	export	TTYRED
+	export	TTYGREEN
+	export	TTYYELLOW
+	export	TTYBLUE
+	export	TTYPURPLE
+	export	TTYCYAN
+	export	TTYWHITE
+	export	TTYBOLD
+	export	TTYRESET
+	export	TTYRED_BOLD
+	export	TTYGREEN_BOLD
+	export	TTYYELLOW_BOLD
+	export	TTYBLUE_BOLD
+	export	TTYPURPLE_BOLD
+	export	TTYCYAN_BOLD
+	export	TTYWHITE_BOLD
+	TTYRED="$( tput setaf 1 >${output} )"
+	TTYGREEN="$( tput setaf 2 >${output} )"
+	TTYYELLOW="$( tput setaf 3 >${output} )"
+	TTYBLUE="$( tput setaf 4 >${output} )"
+	TTYPURPLE="$( tput setaf 5 >${output} )"
+	TTYCYAN="$( tput setaf 6 >${output} )"
+	TTYWHITE="$( tput setaf 7 >${output} )"
+	TTYBOLD="$( tput bold >${output} )"
+	TTYRESET="$( tput sgr0 >${output} )"
+	TTYRED_BOLD="${TTYRED}${TTYBOLD}"
+	TTYGREEN_BOLD="${TTYGREEN}${TTYBOLD}"
+	TTYYELLOW_BOLD="${TTYYELLOW}${TTYBOLD}"
+	TTYBLUE_BOLD="${TTYBLUE}${TTYBOLD}"
+	TTYPURPLE_BOLD="${TTYPURPLE}${TTYBOLD}"
+	TTYCYAN_BOLD="${TTYCYAN}${TTYBOLD}"
+	TTYWHITE_BOLD="${TTYWHITE}${TTYBOLD}"
 }
 
-# pushd_wrapper ()
+# pushd_wrapper()
 #  >1	directory to pass to pushd
-function pushd_wrapper ()
+function pushd_wrapper()
 {
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local directory="${1}"
 
-	printf "${TTYBLUE_BOLD}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYBLUE_BOLD}" &>"${__FIFO_LOG_PIPE}"
 	pushd "${directory}" &>"${__FIFO_LOG_PIPE}" || die "pushd \"${directory}\" failed" $?
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
-# popd_wrapper ()
-function popd_wrapper ()
+# popd_wrapper()
+function popd_wrapper()
 {
-	printf "${TTYBLUE_BOLD}" &>"${__FIFO_LOG_PIPE}"
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
+	printf "%s" "${TTYBLUE_BOLD}" &>"${__FIFO_LOG_PIPE}"
 	popd &>"${__FIFO_LOG_PIPE}" || die "popd failed" $?
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
-# set_wine_git_tag ()
-function set_wine_git_tag ()
+# set_wine_git_tag()
+# ( 1>	: fail on error (1) )
+function set_wine_git_tag()
 {
+	(($# <= 1)) || die "Invalid parameter count: ${#} (0-1)"
+
+	local fail_on_error="${1:-1}"
+
 	# Setup Wine version to build
 	if [[ ! -z "${WINE_BRANCH}" ]]; then
 		if [[ ! "${WINE_BRANCH}" =~ ^(master|origin/master|origin/stable)$ ]]; then
-			die "invalid WINE_BRANCH=\"${WINE_BRANCH}\" specified"
+			((fail_on_error)) && die "invalid WINE_BRANCH=\"${WINE_BRANCH}\" specified"
 		fi
 		export	__WINE_GIT_TAG="${WINE_BRANCH}"
 		unset -v WINE_COMMIT WINE_VERSION
 	elif [[ ! -z "${WINE_COMMIT}" ]]; then
 		if [[ ! "${WINE_BRANCH}" =~ ${SHA1_REGEXP} ]]; then
-			die "invalid WINE_COMMIT=\"${WINE_BRANCH}\" specified (SHA1 commit hash)"
+			((fail_on_error)) && die "invalid WINE_COMMIT=\"${WINE_BRANCH}\" specified (SHA1 commit hash)"
 		fi
 		export	__WINE_GIT_TAG="${WINE_COMMIT}"
 		unset -v WINE_VERSION
 	else
 		if [[ ! "${WINE_VERSION}" =~ ${VERSION_REGEXP} ]]; then
-			die "invalid WINE_VERSION=\"${WINE_VERSION}\" specified"
+			((fail_on_error)) && die "invalid WINE_VERSION=\"${WINE_VERSION}\" specified"
 		fi
 		export	__WINE_GIT_TAG="${WINE_PREFIX}${WINE_VERSION}"
 	fi
 }
 
-# set_wine_staging_git_tag ()
-function set_wine_staging_git_tag ()
+# set_wine_staging_git_tag()
+# ( 1>	: fail on error (1) )
+function set_wine_staging_git_tag()
 {
+	(($# <= 1)) || die "Invalid parameter count: ${#} (0-1)"
+
+	local fail_on_error="${1:-1}"
+
 	# Setup Wine-Staging version to build
 	if [[ ! -z "${WINE_STAGING_BRANCH}" ]]; then
 		if [[ ! "${WINE_STAGING_BRANCH}" =~ ^(master|latest-release|origin/master|origin/stable)$ ]]; then
-			die "invalid WINE_STAGING_BRANCH=\"${WINE_STAGING_BRANCH}\" specified"
+			((fail_on_error)) && die "invalid WINE_STAGING_BRANCH=\"${WINE_STAGING_BRANCH}\" specified"
 		fi
 		export	__WINE_STAGING_GIT_TAG="${WINE_STAGING_BRANCH}"
 		unset -v WINE_STAGING_COMMIT WINE_VERSION
 	elif [[ ! -z "${WINE_STAGING_COMMIT}" ]]; then
 		if [[ ! "${WINE_STAGING_BRANCH}" =~ ${SHA1_REGEXP} ]]; then
-			die "invalid WINE_STAGING_COMMIT=\"${WINE_STAGING_BRANCH}\" specified (SHA1 commit hash)"
+			((fail_on_error)) && die "invalid WINE_STAGING_COMMIT=\"${WINE_STAGING_BRANCH}\" specified (SHA1 commit hash)"
 		fi
 		export	__WINE_STAGING_GIT_TAG="${WINE_STAGING_COMMIT}"
 		unset -v WINE_VERSION
 	else
 		if [[ ! "${WINE_VERSION}" =~ ${VERSION_REGEXP} ]]; then
-			die "invalid WINE_VERSION=\"${WINE_VERSION}\" specified"
+			((fail_on_error)) && die "invalid WINE_VERSION=\"${WINE_VERSION}\" specified"
 		fi
 		if [[ "${WINE_VERSION}" =~ 1\.8\.[1-9]*[0-9] ]]; then
 			export	__WINE_STAGING_GIT_TAG="${WINE_STAGING_PREFIX}${WINE_VERSION}${WINE_STAGING_SUFFIX}"
@@ -164,41 +201,47 @@ function set_wine_staging_git_tag ()
 	fi
 }
 
-# parse_boolean_option ()
+# parse_boolean_option()
 #	  1>	boolean option string (value)
 #   ( 2<	option variable to set to value )
-function parse_boolean_option ()
+function parse_boolean_option()
 {
-	local	__option="${1}"
-	local	__option_name_retvar="${2}"
+	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
+
+	local	__option="${1}" __option_name_reference="${2}"
 	local	__valid_options="([1|0|yes|no|true|false])"
 	local	__option_value
 
 	if [[ -z "${__option}" ]]; then
-		die "no ${__option_name_retvar,,} option value specified ${__valid_options}" "" true
+		die "no ${__option_name_reference,,} option value specified ${__valid_options}" "" 1
 	fi
 	case "${__option}" in
 		0|[Nn][Oo]|[Nn]|[Ff][Aa][Ll][Ss][Ee]|[Ff])
-			__option_value=false;;
+			__option_value=0;;
 		1|[Yy][Ee][Ss]|[Yy]|[Tt][Rr][Uu][Ee]|[Tt])
-			__option_value=true;;
+			__option_value=1;;
 		*)
-			local __option_name="${__option_name_retvar,,}"
-			die "unknown ${__option_name//_/-} option value specified: \"${__option}\" ${__valid_options}" "" true;;
+			local __option_name="${__option_name_reference,,}"
+			die "unknown ${__option_name//_/-} option value specified: \"${__option}\" ${__valid_options}" "" 1;;
 	esac
 
-	if [[ -z "${__option_name_retvar}" ]]; then
+	if [[ -z "${__option_name_reference}" ]]; then
 		echo "${__option_value}"
+	elif [[ "${__option_name_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n option_name="${__option_name_reference}"
+		# shellcheck disable=SC2034
+		option_name="${__option_value}"
 	else
-		eval export $__option_name_retvar="'${__option_value}'"
+		die "Parameter (3): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__option_name_reference}'"
 	fi
-
 }
 
-# set_log_compression ()
-#   1>	: compressor executable or extension
-function set_log_compression ()
+# set_log_compression()
+#   1>	: compressor executable (or file extension)
+function set_log_compression()
 {
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local compressor="${1}"
 	case "${compressor}" in
 		bzip2|bz2)
@@ -210,8 +253,13 @@ function set_log_compression ()
 			export COMPRESSOR_CMD="gzip -fq -9"
 			;;
 		lzma)
-			which gzip &>/dev/null || die "lzma log compression unsupported - xz compressor not installed"
-			export COMPRESSOR_CMD="xz --format=lzma -fq"
+			if which lzma &>/dev/null; then
+				export COMPRESSOR_CMD="lzma -fq"
+			elif which xz &>/dev/null; then
+				export COMPRESSOR_CMD="xz --format=lzma -fq"
+			else
+				die "lzma log compression unsupported - neither of the lzma or xz compressors are installed"
+			fi
 			;;
 		lzop)
 			which lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
@@ -226,7 +274,7 @@ function set_log_compression ()
 			export COMPRESSOR_CMD="lz4 -cfq -BD -9"
 			;;
 		xz)
-			which lz4 &>/dev/null || die "xz log compression unsupported - xz compressor not installed"
+			which xz &>/dev/null || die "xz log compression unsupported - xz compressor not installed"
 			export COMPRESSOR_CMD="xz -fq"
 			;;
 		cat|none|no|disabled)
@@ -238,13 +286,28 @@ function set_log_compression ()
 	esac
 }
 
-# setup_logging ()
-function setup_logging ()
+# logging_thread()
+function logging_thread()
 {
+	# shellcheck disable=SC2173
+    trap "cleanup" ABRT INT QUIT TERM KILL STOP
+    while [[ -p "${__FIFO_LOG_PIPE}" ]]; do
+        ((LOGGING))		&& cat < "${__FIFO_LOG_PIPE}" | tee -a "${LOG}"
+        ((LOGGING))		|| cat < "${__FIFO_LOG_PIPE}"
+    done
+    printf "\n%sLogging completed!!%s\n" "${TTYYELLOW_BOLD}" "${TTYRESET}"
+}
+
+# setup_logging()
+#	1>	: main script command being executed
+function setup_logging()
+{
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local command="${1}"
 	mkfifo -m=600 "${__FIFO_LOG_PIPE}" &>/dev/null || die "mkfifo \"${__FIFO_LOG_PIPE}\" failed" $?
 	# Use a FIFO to compress all log file output in a background shell
-	if [[ "${LOGGING}" == true ]]; then
+	if ((LOGGING)); then
 		# Make Log directory
 		LOG=$(date --iso-8601=seconds)
 		case "${command}" in
@@ -253,36 +316,30 @@ function setup_logging ()
 			upgrade)
 				export LOG="${LOG_DIRECTORY}/chroot-upgrade_${LOG}.log";;
 			build)
-				if [[ "${WINE_STAGING}" == true ]]; then
+				if ((WINE_STAGING)); then
 					export LOG="${LOG_DIRECTORY}/wine-staging-${WINE_STAGING_BRANCH:-${WINE_STAGING_COMMIT:-${WINE_VERSION}}}_${LOG}.log"
 				else
 					export LOG="${LOG_DIRECTORY}/wine-${WINE_BRANCH:-${WINE_COMMIT:-${WINE_VERSION}}}_${LOG}.log"
 				fi;;
+            *)
+                die "Invalid command specified"
 		esac
 		[[ -d "${LOG_DIRECTORY}" ]] || mkdir -p "${LOG_DIRECTORY}" &>/dev/null
 		rm "${LOG}" &>/dev/null
-		printf "${TTYCYAN_BOLD}Finished setting up FIFO logging using: %s${TTYRESET}\n" "${TTYBLUE_BOLD}${LOG}${TTYRESET}"
+		printf "%s\n" "${TTYCYAN_BOLD}Finished setting up FIFO logging using: ${TTYBLUE_BOLD}${LOG}${TTYRESET}"
 	else
-		printf "${TTYCYAN_BOLD}Logging disabled\n${TTYRESET}"
+		printf "%s\n" "${TTYCYAN_BOLD}Logging disabled${TTYRESET}"
 	fi
 	
-	(
-		trap "cleanup" ABRT INT QUIT KILL TERM
-		while [[ -p "${__FIFO_LOG_PIPE}" ]]; do
-			if [[ "${LOGGING}" == true ]]; then
-				cat < "${__FIFO_LOG_PIPE}" | tee -a "${LOG}"
-			else
-				cat < "${__FIFO_LOG_PIPE}"
-			fi
-		done
-		printf "\n%sLogging completed!!%s\n" "${TTYYELLOW_BOLD}" "${TTYRESET}"
-	) &
+	logging_thread &
 	__LOGGING_PID=$!
 }
 
-# check_package_dependencies ()
-function check_package_dependencies ()
+# check_package_dependencies()
+function check_package_dependencies()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	local -a array_executables=( "awk" "bzip2" "debootstrap" "git" "lsb_release" "mkfifo" "md5sum" "schroot" "sed" "wget" )
 	local executable
 
@@ -315,10 +372,12 @@ function check_package_dependencies ()
 	[[ -z "${package_list}" ]] || die "please install the (above) required package(s) and re-run this script"
 }
 
-# usage_information ()
-function usage_information ()
+# usage_information()
+function usage_information()
 {
-	local indent=-2 col_width=-15 bopt_col_width=-20 gopt_col_width=-20
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
+	local indent=-2 col_width=-15 gopt_col_width=-20
 
 	printf "Usage:\n" >&2
 	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] %ssetup-chroot%s\n" \
@@ -375,7 +434,7 @@ function usage_information ()
 	printf "%*s%s%*s%s%*s%s\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "This phase is executed in the dual Chroot Environments." >&2
 	printf "%*s%s%*s%s%*s%s\n" \
-		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Phase includes a make clean operation (if required)." >&2	
+		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Phase includes a make clean operation (if required)." >&2
 	printf "\n" >&2
 	printf "%*s%s%*s%s%*s%s\n" \
 		$((indent-6)) "(${SRC_COMPILE})" "${TTYCYAN_BOLD}" ${col_width} "src-compile" "${TTYRESET}" ${indent} "" "Run source compilation phase." >&2
@@ -405,7 +464,7 @@ function usage_information ()
 	printf "%*s%s%*s%s%*s%s\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--logging[=][y|n|yes|no]" "${TTYRESET}" ${indent} "" "" >&2
 	printf "%*s%s%*s%s%*s%s\n\n" \
-		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Enable/disable logging of operations.     [default=yes]" >&2
+		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Enable/disable logging of operations.	 [default=yes]" >&2
 	printf "%*s%s%*s%s%*s%s\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--log-compression[=][bzip2|gzip|lzma|lzop|none|lz4|xz]" "${TTYRESET}" ${indent} "" "" >&2
 	printf "%*s%s%*s%s%*s%s\n\n" \
@@ -460,27 +519,29 @@ function usage_information ()
 	printf "\n" >&2
 }
 
-# display_completion_message ()
-function display_completion_message ()
+# display_completion_message()
+function display_completion_message()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	if [[ "${COMMAND}" != "build" ]]; then
 		printf "\n%s%s%s: %sChroot-${COMMAND} has completed successfully%s ...\n" \
 			"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 	else
 		local	-a build_phases=("" "src-fetch" "src-prepare" "src-configure" "src-compile" "src-install")
 
-		local phases_completed="" 
+		local phases_completed=""
 		local i count=0
 		for (( i=SRC_FETCH ; i<=SRC_INSTALL ; ++i)); do
-			[[ "${SUBCOMMANDS[i]}" == false ]] && continue
-			
+			((SUBCOMMANDS[i]))	|| continue
+
 			phases_completed="${phases_completed},${build_phases[i]}"
 			: $((++count))
 		done
 		((count==1)) && phases_completed="Build phase: ${phases_completed:1}; has completed successfully, "
 		((count!=1)) && phases_completed="Build phases: ${phases_completed:1}; have completed successfully, "
-		[[ "${WINE_STAGING}" == false ]] && local	wine_version="${__WINE_VERSION}"
-		[[ "${WINE_STAGING}" == true  ]] && local	wine_version="(Staging) ${__WINE_STAGING_VERSION}"
+		((WINE_STAGING))	|| local	wine_version="${__WINE_VERSION}"
+		((WINE_STAGING))	&& local	wine_version="(Staging) ${__WINE_STAGING_VERSION}"
 		printf "\n%s%s%s: %s${phases_completed} for Wine ${wine_version}%s ...\n" \
 				"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 	fi
@@ -488,10 +549,12 @@ function display_completion_message ()
 
 #### Build Helper Functions Definition Block ####
 
-# create_main_directories ()
+# create_main_directories()
 #	1...N>	: array of directories to create
-function create_main_directories ()
+function create_main_directories()
 {
+	(($# >= 1)) || die "Invalid parameter count: ${#} (1-)"
+
 	local -a directories_array=( "${@}" )
 	local i
 	for i in ${!directories_array[*]}; do
@@ -502,10 +565,12 @@ function create_main_directories ()
 	done
 }
 
-# clean_source_directories ()
+# clean_source_directories()
 #   1...N>  : array of source directories to wipe
-clean_source_directories ()
+clean_source_directories()
 {
+	(($# >= 1)) || die "Invalid parameter count: ${#} (1-)"
+
 	local -a directories_array=( "${@}" )
 	local i
 	for i in ${!directories_array[*]}; do
@@ -516,15 +581,17 @@ clean_source_directories ()
 	done	
 }
 
-# clean_build_directories ()
+# clean_build_directories()
 #   1...N>  : array of build directories to wipe the contents of
-clean_build_directories ()
+clean_build_directories()
 {
+	(($# >= 1)) || die "Invalid parameter count: ${#} (1-)"
+
 	local -a directories_array=( "${@}" )
 	local i
 	for i in ${!directories_array[*]}; do
 		if [[ -d "${directories_array[i]}" ]]; then
-			rm -rf "${directories_array[i]}"/* &>"${__FIFO_LOG_PIPE}" \
+			rm -rf "${directories_array[i]:?}"/* &>"${__FIFO_LOG_PIPE}" \
 				|| die "rm -rf \"${directories_array[i]}\"/* failed"
 		else
 			mkdir -p "${directories_array[i]}" \
@@ -533,13 +600,15 @@ clean_build_directories ()
 	done	
 }
 
-# git_clone ()
+# git_clone()
 # ( 1>  : Git directory )
 #   2>  : Git repository URL
-function git_clone ()
+function git_clone()
 {
-	local git_directory="${SOURCE_ROOT}/${1}"
-	local git_repository_url="${@: -1:1}"
+	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
+
+	# shellcheck disable=SC2124
+	local git_directory="${SOURCE_ROOT}/${1}" git_repository_url="${@: -1:1}"
 
 	if (($# == 1)); then
 		git_directory="${git_repository_url##*/}"
@@ -547,18 +616,19 @@ function git_clone ()
 	fi
 	[[ -d "${git_directory}/.git" ]] && return 0
 
-	printf "${TTYCYAN_BOLD}Cloning \"${TTYBLUE_BOLD}${git_repository_url}${TTYRESET}\" into ${TTYBLUE_BOLD}${git_directory}${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
+	printf "%s\n" "${TTYCYAN_BOLD}Cloning \"${TTYBLUE_BOLD}${git_repository_url}${TTYRESET}\" into ${TTYBLUE_BOLD}${git_directory}${TTYRESET} ..." &>"${__FIFO_LOG_PIPE}"
 	git clone "${git_repository_url}" &>"${__FIFO_LOG_PIPE}" \
 		|| die "git clone \"${git_repository_url}\" failed (\"${1}\")" $?
 }
 
-# git_pull_and_checkout ()
+# git_pull_and_checkout()
 #   1>  : Git directory
 #   2>  : Git commit, branch, or tag
-function git_pull_and_checkout ()
+function git_pull_and_checkout()
 {
-	local git_directory="${SOURCE_ROOT}/${1}"
-	local git_version="${2}"
+	(($# == 2)) || die "Invalid parameter count: ${#} (2)"
+
+	local git_directory="${SOURCE_ROOT}/${1}" git_version="${2}"
 
 	pushd_wrapper "${git_directory}"
 	git clean -f -d -q &>"${__FIFO_LOG_PIPE}" || die "git clean -f -d -q failed (\"${1}\")" $?
@@ -570,57 +640,65 @@ function git_pull_and_checkout ()
 	popd_wrapper
 }
 
-# git_get_commit ()
+# git_get_commit()
 #   1>  : Git directory
 #   2<  : Git commit
-function git_get_commit ()
+function git_get_commit()
 {
-	local	git_directory="${SOURCE_ROOT}/${1}"
-	local	__git_commit_retvar="${2}"
-	local	__git_commit
+	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
+
+	local	git_directory="${SOURCE_ROOT}/${1}" __git_commit_reference="${2}" __git_commit
 	
 	pushd_wrapper "${git_directory}"
 	__git_commit=$(git rev-parse HEAD)
 	[[ "${__git_commit}" =~ ${SHA1_REGEXP} ]] || die "git rev-parse HEAD failed (\"${1}\")"
 	popd_wrapper
 
-	if [[ -z "${__git_commit_retvar}" ]]; then
+	if [[ -z "${__git_commit_reference}" ]]; then
 		echo "${__git_commit}"
+	elif [[ "${__git_commit_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n git_commit="${__git_commit_reference}"
+		# shellcheck disable=SC2034
+		git_commit="${__git_commit}"
 	else
-		eval $__git_commit_retvar="'${__git_commit}'"
+		die "Parameter (2): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__git_commit_reference}'"
 	fi
 }
 
-# git_get_tag ()
+# git_get_tag()
 #   1>  : Git directory
 #   2<  : Git tag
-function git_get_tag ()
+function git_get_tag()
 {
-	local	git_directory="${SOURCE_ROOT}/${1}"
-	local	__git_tag_retvar="${2}"
-	local	__git_tag
+	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
+
+	local	git_directory="${SOURCE_ROOT}/${1}" __git_tag_reference="${2}" __git_tag
 
 	pushd_wrapper "${git_directory}"
 	__git_tag=$(git describe --abbrev=0 --tags || die "git describe --abbrev=0 --tags failed")
 	popd_wrapper
 
-	if [[ -z "${__git_tag_retvar}" ]]; then
+	if [[ -z "${__git_tag_reference}" ]]; then
 		echo "${__git_tag}"
+	elif [[ "${__git_tag_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n git_tag="${__git_tag_reference}"
+		# shellcheck disable=SC2034
+		git_tag="${__git_tag}"
 	else
-		eval $__git_tag_retvar="'${__git_tag}'"
+		die "Parameter (2): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__git_tag_reference}'"
 	fi
 }
 
-# wine_staging_get_upstream_commit ()
+# wine_staging_get_upstream_commit()
 #   1>  : Wine-Staging Git directory
 #	2>	: Wine-Staging Git commit
 # ( 3<  : Upstream (Wine) Git commit )
-function wine_staging_get_upstream_commit ()
+function wine_staging_get_upstream_commit()
 {
-	local	git_directory="${SOURCE_ROOT}/${1}"
-	local	__wine_staging_git_commit="${2}"
-	local	__git_commit_retvar="${3}"
-	local 	__git_commit
+	(((2 <= $#) && ($# <= 3))) || die "Invalid parameter count: ${#} (2-3)"
+
+	local	git_directory="${SOURCE_ROOT}/${1}" __wine_staging_git_commit="${2}" __git_commit_reference="${3}" \
+			__git_commit
 
 	pushd_wrapper "${git_directory}"
 	[[ "${__wine_staging_git_commit}" =~ ${SHA1_REGEXP} ]] \
@@ -632,24 +710,30 @@ function wine_staging_get_upstream_commit ()
 				"${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 	popd_wrapper
 
-	if [[ -z "${__git_commit_retvar}" ]]; then
+	if [[ -z "${__git_commit_reference}" ]]; then
 		echo "${__git_commit}"
+	elif [[ "${__git_commit_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n git_commit="${__git_commit_reference}"
+		# shellcheck disable=SC2034
+		git_commit="${__git_commit}"
 	else
-		eval $__git_commit_retvar="'${__git_commit}'"
+		die "Parameter (3): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__git_commit_reference}'"
 	fi
 }
 
-# process_staging_exclude ()
+# process_staging_exclude()
 #	1>	Staging exclude list
 # ( 2<	Processed staging exclude list )
-function process_staging_exclude ()
+function process_staging_exclude()
 {
-	local __staging_exclude="${1}"
-	local __staging_exclude_retvar="${2}"
-	local __staging_patch_file="patches/patchinstall.sh"
+	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
 
-	local __processed_staging_exclude=$( printf "${__staging_exclude}" |	\
-		awk -vstaging_patch_file="${__staging_patch_file}" 				\
+	local	__staging_exclude="${1}" __staging_exclude_reference="${2}" \
+			__staging_patch_file __processed_staging_exclude
+	__staging_patch_file="patches/patchinstall.sh"
+
+	__processed_staging_exclude=$( printf "%s" "${__staging_exclude}" \
+		| awk -vstaging_patch_file="${__staging_patch_file}" 				\
 		'
 			function check_patchset_support(patchset,
 				found)
@@ -680,23 +764,28 @@ function process_staging_exclude ()
 			}' 2>/dev/null
 	)
 	
-	if [[ -z "${__staging_exclude_retvar}" ]]; then
+	if [[ -z "${__staging_exclude_reference}" ]]; then
 		echo "${__processed_staging_exclude}"
+	elif [[ "${__staging_exclude_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n __staging_exclude="${__staging_exclude_reference}"
+		# shellcheck disable=SC2034
+		__staging_exclude="${__processed_staging_exclude}"
 	else
-		eval $__staging_exclude_retvar="'${__processed_staging_exclude}'"
+		die "Parameter (2): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__staging_exclude_reference}'"
 	fi
 }
 
-# apply_patch_array ()
+# apply_patch_array()
 #	1>  	: Source root directory to which to apply p1 formatted patchset
 #	2...N>	: Array of patches to apply to Source root directory
-function apply_patch_array ()
+function apply_patch_array()
 {
+	((2 <= $#)) || die "Invalid parameter count: ${#} (2-)"
+
 	local		__source_directory="${SOURCE_ROOT}/${1}"
 	local -a	__array_patch_files=("${!2}")
-	local		__patch_file
-	local		__patch_log
-	
+	local	__patch_file __patch_log
+
 	pushd_wrapper "${__source_directory}"
 	for __patch_file in "${__array_patch_files[@]}"; do
 		[[ -z "${__patch_file}" ]] && continue
@@ -705,22 +794,24 @@ function apply_patch_array ()
 		printf "%sApplying patch file%s: \"%s${__patch_file}%s\" ...\n" \
 			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 		__patch_log="$(patch --verbose -p1 < "${__patch_file}" || false)"
+		# shellcheck disable=SC2181
 		if (($?)); then
-			printf "${TTYYELLOW}${__patch_log}${TTYRESET}\n" &>"${__FIFO_LOG_PIPE}"
+			printf "%s\n" "${TTYYELLOW}${__patch_log}${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 			die "patch file: \"${__patch_file}\" failed to apply\n" $?
 		fi
 	done
 	popd_wrapper
 }
 
-# apply_patch_directory ()
+# apply_patch_directory()
 #	1>  : Source root directory to which to apply p1 formatted patchset
 #	2>	: Patch directory to apply patches from
-function apply_patch_directory ()
+function apply_patch_directory()
 {
-	local source_directory="${1}"
-	local patch_directory="${2}"
-	local __patch_file
+	((2 == $#)) || die "Invalid parameter count: ${#} (2)"
+
+	local	source_directory="${1}" patch_directory="${2}" \
+			__patch_file
 
 	if [[ ! -d "${patch_directory}" ]]; then
 		printf "%sIgnoring non-existent patch directory%s: \"%s${patch_directory}%s\"\n" \
@@ -734,13 +825,15 @@ function apply_patch_directory ()
 	fi
 }
 
-# apply_user_patches ()
+# apply_user_patches()
 # 1>  : Source root directory to which to apply p1 formatted patchset
-function apply_user_patches ()
+function apply_user_patches()
 {
-	local source_directory="${1}"
-	local patch_directories_count="${#USER_PATCH_DIRECTORIES[@]}"
-	local patch_directory
+	((1 == $#)) || die "Invalid parameter count: ${#} (1)"
+
+	local	source_directory="${1}" \
+			patch_directories_count="${#USER_PATCH_DIRECTORIES[@]}" \
+			patch_directory
 
 	local i
 	for ((i=0;i<patch_directories_count;++i)); do
@@ -754,17 +847,16 @@ function apply_user_patches ()
 
 #### Network Helper Functions Definition Block ####
 
-# get_ubuntu_mirror ()
-#	1>	: Minimum number of connection tries
-#	2>  : Maximum TTL
-# ( 3<  : Fastest local Ubuntu Mirror )
-get_ubuntu_mirror ()
+# get_ubuntu_mirror()
+# ( 1>	: Minimum number of connection tries )
+# ( 2>	: Maximum TTL )
+# ( 3<	: Fastest local Ubuntu Mirror )
+get_ubuntu_mirror()
 {
-	local __min_conn_attempts="${1:-10}"
-	local __max_TTL="${2:-32}"
-	local __ubuntu_mirror_uri_retvar="${3}"
-	local __ubuntu_mirror_list __ubuntu_mirror_uri
+	(($# <= 3)) || die "Invalid parameter count: ${#} (0-3)"
 
+	local	__min_conn_attempts="${1:-10}" __max_TTL="${2:-32}" __ubuntu_mirror_uri_reference="${3}" \
+			__ubuntu_mirror_list __ubuntu_mirror_uri
 
 	__ubuntu_mirror_list="$(
 		wget -q -O- https://launchpad.net/ubuntu/+archivemirrors | \
@@ -785,83 +877,98 @@ get_ubuntu_mirror ()
 		}'
 	)"
 	__ubuntu_mirror_uri=$(
-		netselect -s1 -t${__min_conn_attempts} -m${__max_TTL} ${__ubuntu_mirror_list} 2>/dev/null | awk '{print $2}'
+		# shellcheck disable=SC2086
+		netselect -s1 -t"${__min_conn_attempts}" -m"${__max_TTL}" ${__ubuntu_mirror_list} 2>/dev/null | awk '{print $2}'
 	)
-	if [[ -z "${__ubuntu_mirror_uri_retvar}" ]]; then
+	if [[ -z "${__ubuntu_mirror_uri_reference}" ]]; then
 		echo "${__ubuntu_mirror_uri}"
+	elif [[ "${__ubuntu_mirror_uri_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n ubuntu_mirror_uri="${__ubuntu_mirror_uri_reference}"
+		# shellcheck disable=SC2034
+		ubuntu_mirror_uri="${__ubuntu_mirror_uri}"
 	else
-		eval $__ubuntu_mirror_uri_retvar="'${__ubuntu_mirror_uri}'"
+		die "Parameter (3): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__ubuntu_mirror_uri_reference}'"
 	fi
 }
 
 
 #### Schroot / Chroot Function Definition Block ####
 
-# schroot_session_start ()
+# schroot_session_start()
 #	1>	: Schroot session name
 #	2>  : Schroot session user
 #	3>  : Schroot chroot name
-function schroot_session_start ()
+function schroot_session_start()
 {
+	(($# == 3)) || die "Invalid parameter count: ${#} (3)"
+
 	local	session="${1#session:}" \
 			user="${2}" \
 			chroot="chroot:${3#chroot:}"
 
 	schroot -e -c "session:${session}" &>/dev/null
-	printf "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
 	schroot -b -c "${chroot}" -u "${user}" -n "${session}" &>"${__FIFO_LOG_PIPE}"
-	(($?==0)) || die "schroot -b -c \"${chroot}\" -u \"${user}\" -n \"${session}\" (session start) failed"
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	# shellcheck disable=SC2181
+	(($?)) && die "schroot -b -c \"${chroot}\" -u \"${user}\" -n \"${session}\" (session start) failed"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
-# schroot_session_run ()
+# schroot_session_run()
 #	1>		: Schroot session name
 #	2>		: Schroot session user
 #	3>		: Schroot start directory
 #	4...N>	: Array of commands to run in Schroot environment
-function schroot_session_run ()
+function schroot_session_run()
 {
+	(($# >= 4)) || die "Invalid parameter count: ${#} (4-)"
+
 	local -r	session="session:${1#session:}" \
 				user="${2}" \
 				directory="${3:-${PWD}}"
-	shift 3
-	local -a commands_array=( "${@}" )
+	local -a commands_array=( "${@:4}" )
 
-	local -r command_count=${#commands_array[@]}
 	local i
-	printf "${TTYCYAN}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYCYAN}" &>"${__FIFO_LOG_PIPE}"
 	for i in ${!commands_array[*]}; do
 		schroot -r -c "${session}" -d "${directory}" -- sh -c "${commands_array[i]}" &>"${__FIFO_LOG_PIPE}"
-		(($?==0)) || die "schroot -r -c \"${session}\" -d \"${directory}\" -- ${commands_array[i]} (session run) failed"
+		# shellcheck disable=SC2181
+		(($?)) && die "schroot -r -c \"${session}\" -d \"${directory}\" -- ${commands_array[i]} (session run) failed"
 	done
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
-# schroot_session_cleanup ()
+# schroot_session_cleanup()
 #	1...N>	: Array of Schroot session name(s) to delete
-function schroot_session_cleanup ()
+function schroot_session_cleanup()
 {
+	(($# >= 1)) || die "Invalid parameter count: ${#} (1-)"
+
 	local -r sessions_array=( "${@}" )
 	local sessions
 
-	printf "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
-	for session in "${sessions_array[@]}"; do
+	printf "%s" "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
+	# shellcheck disable=SC2068
+	for session in ${sessions_array[@]}; do
 		sessions="${sessions} -c session:${session#session:}"
 	done
+	# shellcheck disable=SC2086
 	schroot -e ${sessions} &>"${__FIFO_LOG_PIPE}"
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
 # bootstrap_schroot_image()
 #	1>  : Schroot chroot name
 #	2>  : Schroot architecture (32-bit or 64-bit)
-bootstrap_schroot_image ()
+bootstrap_schroot_image()
 {
-	local -r chroot_name="${1}"
-	local -r architecture="${2}"
-	local -r lsb_description="$(lsb_release -sd)"
-	local -r chroot_path="/srv/chroot/${chroot_name}"
+	(($# == 2)) || die "Invalid parameter count: ${#} (2)"
 
+	local -r	chroot_name="${1}" architecture="${2}"
+	local -r	lsb_description="$(lsb_release -sd)" \
+			chroot_path="/srv/chroot/${chroot_name}"
+
+    [[ -d "/etc/schroot/chroot.d" ]] || mkdir -p "/etc/schroot/chroot.d"
 	case "${architecture}" in
 		i386)	(
 	cat <<EOF_Schroot_wine32
@@ -899,26 +1006,29 @@ EOF_Schroot_wine
 			sed -i "\|${path}|d" "/etc/schroot/default/copyfiles"
 		fi
 	done
-	printf "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
-	debootstrap --variant=buildd --arch=${architecture} ${LSB_CODENAME} \
+	printf "%s" "${TTYPURPLE}" &>"${__FIFO_LOG_PIPE}"
+	# shellcheck disable=SC2153
+	debootstrap --variant=buildd --arch"=${architecture}" "${LSB_CODENAME}" \
 			"${chroot_path}" "${UBUNTU_MIRROR_URI}" &>"${__FIFO_LOG_PIPE}"
-	printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+	printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 }
 
 # setup_chroot_build_env()
 #	1>  : Schroot chroot name
-setup_chroot_build_env ()
+setup_chroot_build_env()
 {
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local -r	chroot_name="${1}"
-	local      	session="${SESSION_WINE_INITIALISE}"
-	local -r	session_directory="/var/lib/schroot/session/"
-	local -r	locale_lang="$( locale | awk -F'=' '$1=="LANG" { print $2 }' )"
-	local -r	chroot_path="/srv/chroot/${chroot_name}"
-	
+	local	session="${SESSION_WINE_INITIALISE}"
+	local -r	session_directory="/var/lib/schroot/session/" \
+			locale_lang="$( locale | awk -F'=' '$1=="LANG" { print $2 }' )" \
+			chroot_path="/srv/chroot/${chroot_name}"
+
 	[[ -d "${session_directory}" ]] || mkdir -p "${session_directory}"
 	if [[ ! -f "${chroot_path}/etc/locale.gen" ]]; then
 		# Generate a dummy /etc/locale.gen file for Schroot (as host system does not have a candidate file)
-		grep "${locale_lang}" "${chroot_path}/usr/share/i18n/SUPPORTED" > "${chroot_path}/etc/locale.gen"
+		grep -s "${locale_lang}" "${chroot_path}/usr/share/i18n/SUPPORTED" > "${chroot_path}/etc/locale.gen"
 		printf "en_US.UTF-8 UTF-8\n" >> "${chroot_path}/etc/locale.gen"
 	else
 		# Set valid locales in /etc/locale.gen file for Schroot (as host system does not have a candidate file)
@@ -927,13 +1037,20 @@ setup_chroot_build_env ()
 	fi
 	schroot_session_start "${session}" "root" "${chroot_name}"
 	rm "${chroot_path}"/etc/{protocols,services} &>/dev/null
+
+	cat > "${chroot_path}/etc/apt/sources.list" <<EOF
+deb ${UBUNTU_MIRROR_URI} ${LSB_CODENAME} main restricted multiverse universe
+deb-src ${UBUNTU_MIRROR_URI} ${LSB_CODENAME} main restricted multiverse universe
+EOF
 	schroot_session_run "${session}" "root" "/" \
+		"apt-get install -q -y aptitude apt-utils locales" \
 		"locale-gen" \
-		"apt-get install -q=2 ubuntu-minimal software-properties-common" \
+        "apt-get update	-q -y" \
+		"apt-get upgrade -q -y" \
+		"rm -f \"${chroot_path}/etc/systemd/resolved.conf\"" \
+		"aptitude install -q -y ubuntu-minimal software-properties-common" \
 		"dpkg-reconfigure --frontend=noninteractive locales" \
 		"update-locale LANG=${locale_lang}"
-	schroot_session_run "${session}" "root" "/" \
-		"add-apt-repository -y 'deb ${UBUNTU_MIRROR_URI} ${LSB_CODENAME} main universe'"
 	schroot_session_cleanup "${session}"
 }
 
@@ -942,37 +1059,38 @@ setup_chroot_build_env ()
 		
 # upgrade_chroot_build_env()
 #	1>  : Schroot chroot name
-upgrade_chroot_build_env ()
+upgrade_chroot_build_env()
 {
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local -r	chroot_name="${1}"
-	local      	session="${SESSION_WINE_INITIALISE}"
+	local	  	session="${SESSION_WINE_INITIALISE}"
 	local -r	chroot_path="/srv/chroot/${chroot_name}"
 	
-	sed -i	-e 's/^#[[:blank:]]*deb-src[[:blank:]]\+/deb-src /g' \
-			-e '/^deb[[:blank:]]\+.*[[:blank:]]\+${LSB_CODENAME}[[:blank:]]\+main[[:blank:]]*$/d' \
-			"${chroot_path}/etc/apt/sources.list"
 	schroot_session_start "${session}" "root" "${chroot_name}"
 	schroot_session_run "${session}" "root" "/" \
-		"apt-get update    -q=2" \
-		"apt-get install   -q=2 ubuntu-minimal" \
-		"apt-get install   -q=2 libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev" \
-		"apt-get build-dep -q=2 wine-development" \
-		"apt-get upgrade   -q=2"
+		"aptitude update	-q -y" \
+		"aptitude upgrade   -q -y" \
+		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev" \
+		"apt-get build-dep -q -y -f wine-development" \
+		"aptitude upgrade   -q -y"
 	schroot_session_cleanup "${session}"
 }
 
 #### Package Phases Function Definition Block ####
 
-# src_fetch ()
-function src_fetch ()
+# src_fetch()
+function src_fetch()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 	
 	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
 	# Fetch Wine-Staging Git Source (if required).
 	# Checkout desired Wine version in Wine-Staging Git tree (clean and update first!!)
-	if [[ "${WINE_STAGING}" == true ]]; then
+	if ((WINE_STAGING)); then
 		git_clone "${WINE_STAGING_GIT_URL}"
 		git_pull_and_checkout "wine-staging" "${__WINE_STAGING_GIT_TAG}"
 		git_get_commit "wine-staging" "__WINE_STAGING_COMMIT"
@@ -987,22 +1105,27 @@ function src_fetch ()
 	popd_wrapper
 }
 
-# src_prepare ()
-function src_prepare ()
+# src_prepare()
+function src_prepare()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
-	local	wine_regex="{s/[^[:blank:]]$/& /;s/([[:xdigit:]]{40}|$)/${__WINE_COMMIT}/}"	
-	local	md5hash="$(md5sum "${SOURCE_ROOT}/wine/server/protocol.def" || die "md5sum failed")"
+	local	md5hash
+	md5hash="$(md5sum "${SOURCE_ROOT}/wine/server/protocol.def" || die "md5sum failed")"
 
 	# (1) Apply base (bundled) & working patches (Wine version dependent)
 	local -a	array_patch_files=(
 					"${SCRIPT_DIRECTORY}/Patches/wine-1.5.26-winegcc.patch"
 					"${SCRIPT_DIRECTORY}/Patches/wine-1.6-memset-O3.patch"
-					"${SCRIPT_DIRECTORY}/Patches/wine-1.7.12-osmesa-check.patch"
 					"${SCRIPT_DIRECTORY}/Patches/wine_winecfg_detailed_version.patch"
 					"${SCRIPT_DIRECTORY}/Patches/wine-winhlp32-macro-flex-2.6.3-flex.patch"
 				)
+    # shellcheck disable=SC2016
+    if ! grep -q 'WINE_CHECK_SONAME(OSMesa,OSMesaGetProcAddress,,,\[$X_LIBS -lm $X_EXTRA_LIBS\])' "${SOURCE_ROOT}/wine/configure.ac"; then
+        array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-2.6-osmesa-configure_support_recent_versions.patch" )
+    fi
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[123](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-2])$ ]]; then
 		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-1.8-gnutls-3.5-compat.patch" )
 	fi
@@ -1012,7 +1135,7 @@ function src_prepare ()
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[1-3](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-3])$ ]]; then
 		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-cups-2.2-cupsgetppd-build-fix.patch" )
 	fi
-	mkdir -p "${WORKING_PATCHES_DIRECTORY}"	
+	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
 	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\..*|1\.9\.[01])$ ]]; then
 		# Apply Gentoo patch to enable support for GStreamer 1.0 libraries (vs. obsolete GStreamer 0.1 libraries)
 		pushd_wrapper "${WORKING_PATCHES_DIRECTORY}"
@@ -1027,12 +1150,12 @@ function src_prepare ()
 	apply_patch_array "wine" array_patch_files[@]
 
 	# (2) Apply Wine-Staging patchset
-	if [[ "${WINE_STAGING}" == true && -d "${SOURCE_ROOT}/wine-staging" ]]; then
+	if ((WINE_STAGING)) && [[ -d "${SOURCE_ROOT}/wine-staging" ]]; then
 		(
 			local	staging_exclude
 
 			pushd_wrapper "${SOURCE_ROOT}/wine-staging"
-			WINE_STAGING_EXCLUDE="${WINE_STAGING_EXCLUDE} winhlp32-Flex_Workaround"
+			WINE_STAGING_EXCLUDE="${WINE_STAGING_EXCLUDE} configure-OSMesa winhlp32-Flex_Workaround"
 			process_staging_exclude "${WINE_STAGING_EXCLUDE}" "staging_exclude"
 			# Disable Upstream (Wine Staging) about tab customisation, for winecfg utility, to support our own version
 			if [[ -f "patches/winecfg-Staging/0001-winecfg-Add-staging-tab-for-CSMT.patch" ]]; then
@@ -1041,12 +1164,13 @@ function src_prepare ()
 			fi
 			printf "%sApplying Wine-Staging patchset %s...\n%spatchinstall.sh %sDESTDIR=\"%s${SOURCE_ROOT}/wine%s\" --no-autoconf --all ${staging_exclude}%s\n" \
 					"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN}" &>"${__FIFO_LOG_PIPE}"
+            # shellcheck disable=SC2086
 			patches/patchinstall.sh DESTDIR="${SOURCE_ROOT}/wine" --no-autoconf --all ${staging_exclude} &>"${__FIFO_LOG_PIPE}" \
 				|| die "Wine-Staging \"${SOURCE_ROOT}/wine-staging/patches/patchinstall.sh\" failed" $?
-			printf "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+			printf "%s" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 			popd_wrapper
 		)
-		if [[ "${WINE_STAGING_VERSION}" =~ ${VERSION_REGEXP} && "${WINE_STAGING_VERSION}" =~ ${STABLE_VERSION_REGEXP} ]]; then
+		if [[ "${__WINE_STAGING_VERSION}" =~ ${VERSION_REGEXP} && "${__WINE_STAGING_VERSION}" =~ ${STABLE_VERSION_REGEXP} ]]; then
 			# Handle "unofficial" stable Staging versions
 			sed -i "s/(Staging)/(Staging${WINE_STAGING_SUFFIX})/" "${SOURCE_ROOT}/wine/libs/wine/Makefile.in" || die "sed failed" $?
 		fi
@@ -1063,8 +1187,9 @@ function src_prepare ()
 
 	pushd_wrapper "${SOURCE_ROOT}/wine"
 	# Run autoreconf to update configuration - post application of all patches
-	autoreconf &>"${__FIFO_LOG_PIPE}"
-	if ! $(md5sum -c - <<<"${md5hash}" &>/dev/null); then
+	schroot_session_run "${SESSION_WINE32}" "${USERNAME}" "" \
+		"autoreconf"
+	if ! md5sum -c - <<<"${md5hash}" &>/dev/null; then
 		printf "\"%s${PWD}/protocol.def%s\"%s was patched; running \"%s${PWD}/tools/make_requests%s\" ... \n" \
 			"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYCYAN_BOLD}" "${TTYRESET}"  &>"${__FIFO_LOG_PIPE}"
 		tools/make_requests || die "\"${PWD}/tools/make_requests\" failed"
@@ -1072,9 +1197,11 @@ function src_prepare ()
  	popd_wrapper
 }
 
-# multilib_src_configure ()
-function multilib_src_configure ()
+# multilib_src_configure()
+function multilib_src_configure()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	export	CFLAGS="${WINE_CFLAGS}"
@@ -1096,9 +1223,11 @@ function multilib_src_configure ()
 	popd_wrapper
 }
 
-# multilib_src_compile ()
-function multilib_src_compile ()
+# multilib_src_compile()
+function multilib_src_compile()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	# Build 64-bit wine64
@@ -1123,9 +1252,11 @@ function multilib_src_compile ()
 	popd_wrapper
 }
 
-# multilib_src_install ()
-function multilib_src_install ()
+# multilib_src_install()
+function multilib_src_install()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
 
 	# Install Wine (32-bit) binaries in specified PREFIX path
@@ -1143,25 +1274,28 @@ function multilib_src_install ()
 
 #### Command line processing functions ####
 
-# screen_conf_file ()
+# screen_conf_file()
 #	1>	Global configuration file to screen for errors and exploits
-function screen_conf_file ()
+function screen_conf_file()
 {
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
 	local __script_conf_file="${1}"
 
 	[[ -z ${__script_conf_file} || ! -f "${__script_conf_file}" ]] \
 		&& die "script configuration file: \"${__script_conf_file}\" does not exist"
 
+	# shellcheck disable=SC1004
 	awk 'BEGIN{
 			regex_whitespace="(^[[:blank:]]*|[[:blank:]]*$)"
 			regex_blank_comment_line="^[[:blank:]]*(\#|$)"
-			regex_boolean_variables="^(COLOUR|LOGGING|WINE_STAGING)$"
+			regex_boolean_variables="^(COLOUR|LOGGING|WINE_STAGING)[[:blank:]]*(#|$)"
 			regex_string_variables="^((BUILD|SOURCE)_ROOT|LOG_(COMPRESSION|DIRECTORY)|PREFIX|THREADS|"\
-"WINE_(CFLAGS|CONFIGURATION|MAKE_OPTIONS|VERSION|BRANCH|COMMIT)|WINE_STAGING_(BRANCH|COMMIT|EXCLUDE))$"
-			regex_array_string_variables="^(USER_PATCH_DIRECTORIES)$"
-			regex_string_value="^\"[^\"]*\"$"
-			regex_boolean_value="^(0|1|false|true|no|yes)$"
-			regex_array_string_value="^\\([[:blank:]]*(\"[^\"]*\"[[:blank:]]*)+\\)$"
+"WINE_(CFLAGS|CONFIGURATION|MAKE_OPTIONS|VERSION|BRANCH|COMMIT)|WINE_STAGING_(BRANCH|COMMIT|EXCLUDE))[[:blank:]]*(#|$)"
+			regex_array_string_variables="^(USER_PATCH_DIRECTORIES)[[:blank:]]*(#|$)"
+			regex_string_value="^\"[^\"]*\"[[:blank:]]*(#|$)"
+			regex_boolean_value="^(0|1|false|true|no|yes)[[:blank:]]*(#|$)"
+			regex_array_string_value="^\\([[:blank:]]*(\"[^\"]*\"[[:blank:]]*)+\\)[[:blank:]]*(#|$)"
 			regex_shell_command="\$\\([^\)]+\\)"
 			command_tput="tput setaf 1 ; tput bold"
 			command_tput | getline ttyred_bold
@@ -1215,22 +1349,22 @@ function screen_conf_file ()
 }
 
 		
-# process_command ()
+# process_command()
 #  	1...N>	:  Array of commands and options (passed as CLI parameters)
-function process_command ()
+function process_command()
 {	
 	# Process options
 	local option="${1}"
-	local build_options
+	local build_options directory directory_type parent_directory
 	while (($#)); do
 		case "${option}" in
 			--build-directory|--build-dir|--log-directory|--log-dir|--patch-directory|--patch-dir|--source-directory|--source-dir|--prefix|--prefix-directory|--prefix-dir)
-				local	directory_type=$(echo "${option}" | sed -r 's:(^\-\-|\-directory$|\-dir$)::g')
+				directory_type=$(echo "${option}" | sed -r 's:(^\-\-|\-directory$|\-dir$)::g')
 				[[ "${directory_type}" != "log" ]] && build_options="${build_options} ${option}"
 				shift
- 				(($#)) ||	 die "invalid option syntax: ${directory_type} directory not specified" "" true
-				local directory=$(readlink -f "${1}")
-				local parent_directory=$(get_parent_directory "${directory}")
+ 				(($#)) ||	 die "invalid option syntax: ${directory_type} directory not specified" "" 1
+				directory=$(readlink -f "${1}")
+				parent_directory=$(get_parent_directory "${directory}")
 				[[ -d "${parent_directory}" ]] || die "${directory_type} directory parent: \"{parent_directory}\" does exist"
 				case "${directory_type}" in
 					build)		export BUILD_ROOT="${directory}";;
@@ -1243,14 +1377,14 @@ function process_command ()
 
 			-c=*|--color=*|--colour=*)
 				parse_boolean_option "${option#*=}" "COLOUR"
-				setup_tty_colours ${COLOUR}
+				setup_tty_colours "${COLOUR}"
 				;;
 
 			-c|--color|--colour)
 				shift
- 				(($#)) ||	die "invalid option syntax: no colour option specified" "" true
+ 				(($#)) ||	die "invalid option syntax: no colour option specified" "" 1
 				parse_boolean_option "${1}" "COLOUR"
-				setup_tty_colours ${COLOUR}
+				setup_tty_colours "${COLOUR}"
 				;;
 
 			--logging=*|--log=*)
@@ -1259,7 +1393,7 @@ function process_command ()
 
 			-logging|--log)
 				shift
- 				(($#)) ||	die "invalid option syntax: no logging option specified" "" true
+ 				(($#)) ||	die "invalid option syntax: no logging option specified" "" 1
 				parse_boolean_option "${1}" "LOGGING"
 				;;
 
@@ -1269,7 +1403,7 @@ function process_command ()
 
 			--log-compression)
 				shift
-				(($#)) ||	die "invalid option syntax: no compression option specified" "" true
+				(($#)) ||	die "invalid option syntax: no compression option specified" "" 1
 				set_log_compression "${1}"
 				;;
 
@@ -1284,8 +1418,8 @@ function process_command ()
 				build_options="${build_options} ${option}"
 				shift
 				if (($#==0)); then
-					[[ "${WINE_STAGING}" == true ]]  &&	die "invalid option syntax: Wine-Staging version not specified" "" true
-					[[ "${WINE_STAGING}" == false ]] &&	die "invalid option syntax: Wine version not specified" "" true
+					((WINE_STAGING))   && die "invalid option syntax: Wine-Staging version not specified" "" 1
+					((WINE_STAGING))   || die "invalid option syntax: Wine version not specified" "" 1
 				fi
 				WINE_VERSION="${1}"
 				set_wine_git_tag
@@ -1302,7 +1436,7 @@ function process_command ()
 			--wine-staging-branch|--wine-staging-commit)
 				build_options="${build_options} ${option}"
 				shift
-				(($#)) || die "invalid option syntax: Wine-Staging ${option##*-} not specified" "" true
+				(($#)) || die "invalid option syntax: Wine-Staging ${option##*-} not specified" "" 1
 				[[ "${option}" =~ branch$ ]] && WINE_STAGING_BRANCH="${1}"
 				[[ "${option}" =~ commit$ ]] && WINE_STAGING_COMMIT="${1}"
 				set_wine_staging_git_tag
@@ -1318,7 +1452,7 @@ function process_command ()
 			--wine-branch|--wine-commit)
 				build_options="${build_options} ${option}"
 				shift
-				(($#)) || die "invalid option syntax: Wine ${option##*-} not specified" "" true
+				(($#)) || die "invalid option syntax: Wine ${option##*-} not specified" "" 1
 				[[ "${option}" =~ branch$ ]] && WINE_BRANCH="${1}"
 				[[ "${option}" =~ commit$ ]] && WINE_COMMIT="${1}"
 				set_wine_git_tag
@@ -1327,17 +1461,17 @@ function process_command ()
 			--wine-staging=*|--staging=*)
 				build_options="${build_options} ${option%=*}"
 				parse_boolean_option "${option#*=}" "WINE_STAGING"
-				[[ "${WINE_STAGING}" == true ]] 	&& set_wine_staging_git_tag
-				[[ "${WINE_STAGING}" == false ]]	&& set_wine_git_tag
+				((WINE_STAGING))    && set_wine_staging_git_tag
+				((WINE_STAGING))	|| set_wine_git_tag
 				;;
 
 			--wine-staging|--staging)
 				build_options="${build_options} ${option}"
 				shift
- 				(($#)) || die "invalid option syntax: Wine-Staging option not specified ([yes|no])" "" true
+ 				(($#)) || die "invalid option syntax: Wine-Staging option not specified ([yes|no])" "" 1
 				parse_boolean_option "S{1}" "WINE_STAGING"
-				[[ "${WINE_STAGING}" == true ]] 	&& set_wine_staging_git_tag
-				[[ "${WINE_STAGING}" == false ]]	&& set_wine_git_tag
+				((WINE_STAGING))    && set_wine_staging_git_tag
+				((WINE_STAGING))	|| set_wine_git_tag
 				;;
 
 
@@ -1348,7 +1482,7 @@ function process_command ()
 				;;
 
 			--*)
-				die "unknown option specified: \"${option}\"" "" true
+				die "unknown option specified: \"${option}\"" "" 1
 				;;
 
 			*)
@@ -1364,9 +1498,9 @@ function process_command ()
 	build_options="${build_options:1}"
 
 	# Process commands
- 	(($# < 1)) &&	die "no command specified" "" true
+ 	(($# < 1)) &&	die "no command specified" "" 1
 	for ((i=SRC_FETCH; i<=SRC_INSTALL; ++i)); do
-		SUBCOMMANDS[i]=false
+		SUBCOMMANDS[i]=0
 	done
 	local	new_command prev_command
 	while (( $# > 0 )); do
@@ -1380,65 +1514,65 @@ function process_command ()
 
 		generate-conf|conf)
 			if [[ ! -z "${COMMAND}" ]]; then
-				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" true
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
 			elif [[ ! -z "${build_options}" ]]; then
-				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" true
+				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="conf"
 			;;
 
 		setup-chroot|setup)
 			if [[ ! -z "${COMMAND}" ]]; then
-				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" true
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
 			elif [[ ! -z "${build_options}" ]]; then
-				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" true
+				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="setup"
 			;;
 		
 		upgrade-chroot|upgrade|update-chroot|update)
 			if [[ ! -z "${COMMAND}" ]]; then
-				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" true
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" 1
 			elif [[ ! -z "${build_options}" ]]; then
-				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" true
+				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="upgrade"
 			;;
 
 		version)
 			if [[ ! -z "${COMMAND}" ]]; then
-				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" true
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" 1
 			elif [[ ! -z "${build_options}" ]]; then
-				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" true
+				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="version"
 			;;
 
 		src-fetch|src-prepare|src-configure|src-compile|src-install|build|build-all)
 			if [[ "${COMMAND}" =~ setup|upgrade ]]; then
-				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" true
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="build"
 			case "${new_command}" in
 				src-fetch)
-					SUBCOMMANDS[SRC_FETCH]=true;;
+					SUBCOMMANDS[SRC_FETCH]=1;;
 				src-prepare)
-					SUBCOMMANDS[SRC_PREPARE]=true;;
+					SUBCOMMANDS[SRC_PREPARE]=1;;
 				src-configure)
-					SUBCOMMANDS[SRC_CONFIGURE]=true;;
+					SUBCOMMANDS[SRC_CONFIGURE]=1;;
 				src-compile)
-					SUBCOMMANDS[SRC_COMPILE]=true;;
+					SUBCOMMANDS[SRC_COMPILE]=1;;
 				src-install)
-					SUBCOMMANDS[SRC_INSTALL]=true;;
+					SUBCOMMANDS[SRC_INSTALL]=1;;
 				build|build-all)
 					for ((i=SRC_FETCH; i<=SRC_INSTALL; ++i)); do
-						SUBCOMMANDS[i]=true
+						SUBCOMMANDS[i]=1
 					done;;
 			esac
 			;;
 
 		*)
-			die "unknown command specified: \"${new_command}\""  "" true
+			die "unknown command specified: \"${new_command}\""  "" 1
 			;;
 
 		esac
@@ -1447,17 +1581,24 @@ function process_command ()
 	done
 }
 
-# execute_commands ()
-function execute_commands ()
+# execute_commands()
+function execute_commands()
 {
+	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
+
 	case "${COMMAND}" in
 	conf)
-		export DATE_STAMP=$(date)
-		printf "\n${TTYWHITE}Generating default configuration file: \"${TTYCYAN_BOLD}${SCRIPT_CONFIG}${TTYRESET}${TTYWHITE}\"${TTYRESET} ...\n"
+		export DATE_STAMP
+		DATE_STAMP=$(date)
+		printf "\n%s\n" "${TTYWHITE}Generating default configuration file: \"${TTYCYAN_BOLD}${SCRIPT_CONFIG}${TTYRESET}${TTYWHITE}\"${TTYRESET} ..."
+		# shellcheck disable=SC2016
 		su -p -c '
 			(
+				export wine_staging_enabled
+				((WINE_STAGING)) && wine_staging_enabled="true"
+				((WINE_STAGING)) || wine_staging_enabled="false"
 				cat <<EOF_script_config
-# 
+#
 # ${SCRIPT_CONFIG} - Configuration file for ${SCRIPT_NAME}
 #
 # Generated by ${SCRIPT_NAME} (${SCRIPT_VERSION}) on ${DATE_STAMP} (build version: ${SCRIPT_VERSION})
@@ -1487,7 +1628,7 @@ function execute_commands ()
 # Versioning
 #
 # Enable / disable Wine-Staging patchset support.
-# WINE_STAGING=${WINE_STAGING}							# default
+# WINE_STAGING=${wine_staging_enabled}							# default
 #
 # Wine / Wine-Staging version to build.
 # WINE_VERSION="1.9.20"
@@ -1508,7 +1649,7 @@ function execute_commands ()
 # Logging
 #
 # Enable / disable operation logging for commands: setup-chroot; upgrade-chroot; build-all (and sub-phases).
-# LOGGING=true											# default
+# LOGGING=1											    # default
 #
 # Directory to hold log files - recording all the script operations.
 # LOG_DIRECTORY="${LOG_DIRECTORY}"						# default
@@ -1540,50 +1681,54 @@ EOF_script_config
 		;;
 	setup)
 		if [[ ! -z "${OPTIONS}" ]]; then
-			die "invalid option(s) specified: ${OPTIONS}" "" true
+			die "invalid option(s) specified: ${OPTIONS}" "" 1
 		fi
 		setup_logging "${COMMAND}"
 		export -f schroot_session_start schroot_session_run schroot_session_cleanup \
 					cleanup die get_ubuntu_mirror bootstrap_schroot_image \
 					setup_chroot_build_env upgrade_chroot_build_env
+
+		# shellcheck disable=SC2016
 		su -p -c '
-			printf "\n${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			declare		UBUNTU_MIRROR_URI
+			printf "\n%s\n" "${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ..." &>"${__FIFO_LOG_PIPE}"
+			export		UBUNTU_MIRROR_URI
 			UBUNTU_MIRROR_URI="$(get_ubuntu_mirror)"
 			printf "\n${TTYWHITE_BOLD}Creating 32-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			bootstrap_schroot_image ''"${LSB_CODENAME}_wine_32bit"'' "i386"
+			bootstrap_schroot_image "'"${LSB_CODENAME}_wine_32bit"'" "i386"
 			printf "\n${TTYWHITE_BOLD}Creating 64-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			bootstrap_schroot_image ''"${LSB_CODENAME}_wine_64bit"'' "amd64"
+			bootstrap_schroot_image "'"${LSB_CODENAME}_wine_64bit"'" "amd64"
 			printf "\n${TTYWHITE_BOLD}Installing Ubuntu image to 32-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			setup_chroot_build_env ''"${LSB_CODENAME}_wine_32bit"''
+			setup_chroot_build_env "'"${LSB_CODENAME}_wine_32bit"'"
 			printf "\n${TTYWHITE_BOLD}Installing Ubuntu image to 64-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			setup_chroot_build_env ''"${LSB_CODENAME}_wine_64bit"''
+			setup_chroot_build_env "'"${LSB_CODENAME}_wine_64bit"'"
 			printf "\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 32-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			upgrade_chroot_build_env ''"${LSB_CODENAME}_wine_32bit"''
+			upgrade_chroot_build_env "'"${LSB_CODENAME}_wine_32bit"'"
 			printf "\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 64-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
-			upgrade_chroot_build_env ''"${LSB_CODENAME}_wine_64bit"''
+			upgrade_chroot_build_env "'"${LSB_CODENAME}_wine_64bit"'"
 		' root || die "Failed to setup Chroot environments"
 		;;
 	upgrade)
 		setup_logging "${COMMAND}"
 		export -f schroot_session_start schroot_session_run schroot_session_cleanup \
 					cleanup die upgrade_chroot_build_env
-		local chroot_name found32bit_chroot=false found64bit_chroot=false
+		local chroot_name found32bit_chroot=0 found64bit_chroot=0
+
 		while read -r chroot_name; do
-			[[ "${chroot_name}" == "${CHROOT32_NAME}" ]] && found32bit_chroot=true
-			[[ "${chroot_name}" == "${CHROOT64_NAME}" ]] && found64bit_chroot=true
+			[[ "${chroot_name}" == "${CHROOT32_NAME}" ]] && found32bit_chroot=1
+			[[ "${chroot_name}" == "${CHROOT64_NAME}" ]] && found64bit_chroot=1
 		done < <(schroot -l)
-		if [[ "${found32bit_chroot}" == false && "${found64bit_chroot}" == false ]]; then
-			if [[ "${found32bit_chroot}" == false ]]; then
+		if ((!found32bit_chroot && !found64bit_chroot)); then
+			if ((!found32bit_chroot)); then
 				printf "%sChroot Environment%s: \"%s${CHROOT32_NAME}%s\"%s ; has not yet been created.%s\n" \
 						"${TTYRED_BOLD}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}" "${TTYRED_BOLD}" >&2
 			fi
-			if [[ "${found64bit_chroot}" == false ]]; then
+			if ((!found64bit_chroot)); then
 				printf "%sChroot Environment%s: \"%s${CHROOT64_NAME}%s\"%s ; has not yet been created.%s\n" \
 						"${TTYRED_BOLD}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}" "${TTYRED_BOLD}" >&2
 			fi
 			die "Please run: \"${SCRIPT_NAME} setup-chroot\" ; initially - to setup Chroot Environments"
 		fi
+		# shellcheck disable=SC2016
 		su -p -c '
 			printf "\n${TTYWHITE_BOLD}Upgrade Wine Development packages in 32-bit Chroot Environment${TTYRESET} ...\n" &>"${__FIFO_LOG_PIPE}"
 			upgrade_chroot_build_env ''"${LSB_CODENAME}_wine_32bit"''
@@ -1597,13 +1742,13 @@ EOF_script_config
 		;;			
 	build)
 		setup_logging "${COMMAND}"
-		create_main_directories "${SOURCE_ROOT}" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools" "${BUILD_ROOT}/wine64" 
-		if [[ "${SUBCOMMANDS[SRC_CONFIGURE]}" == true || "${SUBCOMMANDS[SRC_COMPILE]}" == true || "${SUBCOMMANDS[SRC_INSTALL]}" == true ]]; then
+		create_main_directories "${SOURCE_ROOT}" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools" "${BUILD_ROOT}/wine64"
+		if ((SUBCOMMANDS[SRC_PREPARE] || SUBCOMMANDS[SRC_CONFIGURE] || SUBCOMMANDS[SRC_COMPILE] || SUBCOMMANDS[SRC_INSTALL])); then
 			schroot_session_start "${SESSION_WINE32}" "${USERNAME}" "${CHROOT32_NAME}"
 			schroot_session_start "${SESSION_WINE64}" "${USERNAME}" "${CHROOT64_NAME}"
 		fi
-		[[ "${SUBCOMMANDS[SRC_FETCH]}" == true ]]		&& src_fetch
-		if [[ "${WINE_STAGING}" == true ]]; then
+		((SUBCOMMANDS[SRC_FETCH]))		&& src_fetch
+		if ((WINE_STAGING)); then
 			git_get_tag "wine-staging" "__WINE_STAGING_VERSION"
 			export __WINE_STAGING_VERSION="${__WINE_STAGING_VERSION#${WINE_STAGING_PREFIX}}"
 			git_get_commit "wine-staging" "__WINE_STAGING_COMMIT"
@@ -1611,22 +1756,29 @@ EOF_script_config
 		git_get_tag "wine" "__WINE_VERSION"
 		export __WINE_VERSION="${__WINE_VERSION#${WINE_PREFIX}}"
 		git_get_commit "wine" "__WINE_COMMIT"
-		[[ "${SUBCOMMANDS[SRC_PREPARE]}" == true ]]		&& src_prepare
-		[[ "${SUBCOMMANDS[SRC_CONFIGURE]}" == true ]]	&& multilib_src_configure
-		[[ "${SUBCOMMANDS[SRC_COMPILE]}" == true ]]		&& multilib_src_compile
-		[[ "${SUBCOMMANDS[SRC_INSTALL]}" == true ]]		&& multilib_src_install
+		((SUBCOMMANDS[SRC_PREPARE]))	&& src_prepare
+		((SUBCOMMANDS[SRC_CONFIGURE]))	&& multilib_src_configure
+		((SUBCOMMANDS[SRC_COMPILE]))	&& multilib_src_compile
+		((SUBCOMMANDS[SRC_INSTALL]))	&& multilib_src_install
 		;;
 	esac
 }
 
 # main()
-function main ()
+function main()
 {
-	declare -r	SCRIPT_PATH=$(readlink -f $0)
-	declare -r	SCRIPT_DIRECTORY=$(dirname "${SCRIPT_PATH}")
-	export		SCRIPT_NAME=$(basename "${SCRIPT_PATH}")
+    export      SCRIPT_PID
+	export		SCRIPT_PATH
+	export		SCRIPT_DIRECTORY
+	export		SCRIPT_NAME
+	export		SCRIPT_VERSION
+
+	SCRIPT_PID=$$
+	SCRIPT_PATH="$(readlink -f "${0}")"
+	SCRIPT_DIRECTORY="$(dirname "${SCRIPT_PATH}")"
+	SCRIPT_NAME="$(basename "${SCRIPT_PATH}")"
 	pushd "${SCRIPT_PATH}" &>/dev/null
-	declare	-r	SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
+	SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
 	popd &>/dev/null
 	export		SCRIPT_CONFIG="/etc/${SCRIPT_NAME%.sh}.conf"
 
@@ -1637,6 +1789,7 @@ function main ()
 		if ! screen_conf_file "${SCRIPT_CONFIG}"; then
 			die "invalid lines detected in configuration file \"${SCRIPT_CONFIG}\""
 		else
+			# shellcheck disable=SC1090
 			. "${SCRIPT_CONFIG}"
 		fi
 	fi
@@ -1644,17 +1797,18 @@ function main ()
 	#### Global Environment Variable defaults ####
 
 	# Global general
-	declare		COLOUR="${COLOUR:-false}"
+	declare		COLOUR="${COLOUR:-0}"
 	parse_boolean_option "${COLOUR}" "COLOUR"
-	setup_tty_colours ${COLOUR}
+	setup_tty_colours "${COLOUR}"
 	if (( EUID == 0 )); then
-            die "do not run this script as root - you will asked for full root prvileges as required!!"
-        else
-            printf "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}...\n"
-        fi
-        
+			die "do not run this script as root - you will asked for full root privileges as required!!"
+		else
+			printf "%s\n" "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}..."
+		fi
+
 	# Global versioning defaults
-	declare		WINE_STAGING="${WINE_STAGING:-false}"
+	declare		WINE_STAGING="${WINE_STAGING:-0}"
+	parse_boolean_option "${WINE_STAGING}" "WINE_STAGING"
 	declare		__WINE_COMMIT	__WINE_STAGING_COMMIT
 	declare		__WINE_GIT_TAG	__WINE_STAGING_GIT_TAG
 	declare		__WINE_VERSION	__WINE_STAGING_VERSION
@@ -1669,16 +1823,20 @@ function main ()
 	
 	# Global versioning constants
 	declare -r	SHA1_REGEXP="^[[:xdigit:]]{40}$"
+	declare -r	VARIABLE_NAME_REGEXP="^[_[:alpha:]][_[:alnum:]]+$"
 	declare -r	VERSION_REGEXP="^[[:digit:]]{1,2}\.[[:digit:]]{1,2}(\.[[:digit:]]{1,2}|)(\-rc[[:digit:]]{1}|)$"
 	declare -r	STABLE_VERSION_REGEXP="^1\.8\.[[:digit:]]{1,2}$"
 	declare -r	WINE_STAGING_PREFIX="v"
 	declare -r	WINE_STAGING_SUFFIX="-unofficial"
 	declare -r	WINE_PREFIX="wine-"
-	[[ "${WINE_STAGING}" == true ]] 	&& set_wine_staging_git_tag
-	[[ "${WINE_STAGING}" == false ]]	&& set_wine_git_tag
-	
+	((WINE_STAGING)) 	&& set_wine_staging_git_tag 0
+	((WINE_STAGING))	|| set_wine_git_tag 0
+
 	# Global build options and directory defaults
-	[[ -z "${THREADS}" ]] && export THREADS="$(awk '{ threads+=($0 ~ "^processor") }END{ print threads+1 }' /proc/cpuinfo)"
+	if [[ -z "${THREADS}" ]]; then
+		export THREADS
+		THREADS="$(awk '{ threads+=($0 ~ "^processor") }END{ print threads+1 }' /proc/cpuinfo)"
+	fi
 	export		PREFIX="${PREFIX:-${HOME}/usr}"
 	export		SOURCE_ROOT="${SOURCE_ROOT:-${HOME}/Wine/Source}"
 	export		WORKING_PATCHES_DIRECTORY="${WORKING_PATCHES_DIRECTORY:-${SOURCE_ROOT}/Patches}"
@@ -1689,7 +1847,8 @@ function main ()
 	export		WINE_MAKE_OPTIONS="${WINE_MAKE_OPTIONS:--j${THREADS}}"
 	
 	# Global schroot constants
-	export		LSB_CODENAME="$(lsb_release -sc)"
+	export		LSB_CODENAME
+	LSB_CODENAME="$(lsb_release -sc)"
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
 	export		SESSION_WINE_INITIALISE="session:wine_initialise"
@@ -1701,15 +1860,18 @@ function main ()
 	declare -r	SRC_FETCH=1 SRC_PREPARE=2 SRC_CONFIGURE=3 SRC_COMPILE=4 SRC_INSTALL=5
 
 	# Global logging constants
-	export 		LOGGING="${LOGGING:-true}"
-	export		__FIFO_LOG_PIPE="$( mktemp -u )"
+	export 		LOGGING="${LOGGING:-1}"
+	parse_boolean_option "${LOGGING}" "LOGGING"
+	export		__FIFO_LOG_PIPE
 	export		__LOGGING_PID
+	__FIFO_LOG_PIPE="$( mktemp -u )"
 
 	# Run whole process set at lowest priority
 	renice +19 -p $$ &>/dev/null
 
-	# Cleanup after ourselves with function cleanup ()
-	trap "trap_exit" ABRT INT QUIT KILL TERM
+	# Cleanup after ourselves with function cleanup()
+	# shellcheck disable=SC2173
+	trap "trap_exit" ABRT INT QUIT TERM KILL STOP
 
 	# Cleanup any remaining schroot sessions from previous run
 	schroot -e -c "${SESSION_WINE_INITIALISE}" &>/dev/null
