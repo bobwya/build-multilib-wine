@@ -1044,7 +1044,7 @@ deb-src ${UBUNTU_MIRROR_URI} ${LSB_CODENAME} main restricted multiverse universe
 EOF
 	schroot_session_run "${session}" "root" "/" \
 		"apt-get install -q -y aptitude apt-utils locales" \
-		"locale-gen" \
+		"locale-gen ${locale_lang}" \
         "apt-get update	-q -y" \
 		"apt-get upgrade -q -y" \
 		"rm -f \"${chroot_path}/etc/systemd/resolved.conf\"" \
@@ -1055,7 +1055,6 @@ EOF
 }
 
 #		"dpkg-reconfigure locales" \
-#		"locale-gen ${locale_lang}" \
 		
 # upgrade_chroot_build_env()
 #	1>  : Schroot chroot name
