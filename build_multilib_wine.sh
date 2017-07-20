@@ -820,7 +820,11 @@ function apply_patch_directory()
 	else
 		printf "%sApplying patches from patch directory%s: \"%s${patch_directory}%s\" ...\n" \
 				"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYBLUE}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
-		local array_patch_files=( "$(find "${patch_directory}" -type f -name "*.patch")" )
+		local array_patch_files=()
+		while IFS=  read -r -d $'\0'; do
+		    array_patch_files+=("$REPLY")
+		done < <(find "${patch_directory}" -type f -name "*.patch" -print0)
+
 		apply_patch_array "${source_directory}" array_patch_files[@]
 	fi
 }
