@@ -335,6 +335,27 @@ function setup_logging()
 	__LOGGING_PID=$!
 }
 
+# fetch_wine_staging_patchbin()
+#	1>	: directory to download scripts to
+function fetch_wine_staging_patchbin_script()
+{
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
+	local __scripts_directory="${1}"
+	if [[ ! -d "${__scripts_directory}" ]]; then
+		die "Script download directory does not exist: \"${__scripts_directory}\""
+	fi
+
+	pushd_wrapper "${__scripts_directory}"
+	wget -O "${WINE_STAGING_PATCHBIN_SCRIPT}" "${WINE_STAGING_BINPATCH_URL}" &>"${__FIFO_LOG_PIPE}" \
+		|| die "wget failed: unable to download Wine Staging gitapply.sh script: \"${WINE_STAGING_BINPATCH_URL}\""
+	sed -E -i "s/(\.\/)?gitapply(\.sh)?/${WINE_STAGING_PATCHBIN_SCRIPT}/g" "${WINE_STAGING_PATCHBIN_SCRIPT}" &>"${__FIFO_LOG_PIPE}" \
+		|| die "sed failed: patching Wine Staging gitapply.sh (${WINE_STAGING_PATCHBIN_SCRIPT}) script"
+	chmod +x "${WINE_STAGING_PATCHBIN_SCRIPT}" &>"${__FIFO_LOG_PIPE}" \
+		|| die "chmod +x failed"
+	popd_wrapper
+}
+
 # check_package_dependencies()
 function check_package_dependencies()
 {
@@ -549,6 +570,25 @@ function display_completion_message()
 
 #### Build Helper Functions Definition Block ####
 
+# fetch_extract_tarball()
+#	1>	: directory to extract archive to (. = pwd)
+#	2>	: tarball archive URL
+function fetch_and_extract_tarball()
+{
+	(( ($# == 2) || ($# == 3) )) || die "Invalid parameter count: ${#} (2-3)"
+	local __directory="${1:-.}" __download_url="${2}" __tarball
+	if (($# == 3)); then
+		__tarball="${3}"
+	else
+		__tarball="$(basename "${__download_url}")"
+	fi
+	[[ "${__directory}" != "." ]] && pushd_wrapper "${__directory}"
+	wget -O "${__tarball}" "${__download_url}" &>"${__FIFO_LOG_PIPE}" || die "wget \"${__download_url}\" failed"
+	tar xvfa "${__tarball}" &>"${__FIFO_LOG_PIPE}" || die "tar e(x)tract failed"
+	rm "${__tarball}" &>"${__FIFO_LOG_PIPE}" || die "rm failed"
+	[[ "${__directory}" != "." ]] && popd_wrapper
+}
+
 # create_main_directories()
 #	1...N>	: array of directories to create
 function create_main_directories()
@@ -721,6 +761,50 @@ function wine_staging_get_upstream_commit()
 	fi
 }
 
+# sieve_patchset_array_by_git_commit()
+#	1>  : Git Source directory
+#	2[-N]>  : Patch-set array(s) (reference(s))
+sieve_patchset_array_by_git_commit() {
+	(($# >= 2))	|| die "invalid parameter count: ${#} (2-)"
+
+	local __commit_hash __git_directory __git_log __patch_array_reference i_arg i_array __line
+
+	__git_directory="${1%/}"
+	if [[ ! -d "${__git_directory}/.git" ]]; then
+		die "argument (1): path \"${__git_directory}\" is not a valid Git repository directory"
+	fi
+	pushd_wrapper "${__git_directory}"
+	__git_log="$( git log --pretty=format:%H 2>/dev/null || die "git log failed" )"
+	popd_wrapper
+
+	for (( i_arg=1 ; $# > 1 ; ++i_arg)); do
+		shift 1
+		__patch_array_reference="${1}"
+		if [[ ! "${__patch_array_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+			die "argument (${i_arg}): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__patch_array_reference}'"
+		fi
+
+		declare -n patch_array="${__patch_array_reference}"
+		for i_array in "${!patch_array[@]}"; do
+			[[ -f "${patch_array[i_array]}" ]] || die "patch file: \"${patch_array[i_array]}\" does not exist"
+
+			__line=0
+			while
+				: $((++__line))
+				__commit_hash="$( sed -n -e "${__line}"'s/^.*\([[:xdigit:]]\{40\}\).*$/\1/p' "${patch_array[i_array]}" )"
+				[[ "${__commit_hash}" =~ ${SHA1_REGEXP} ]]
+			do
+				[[ "${__git_log}" =~ ${__commit_hash} ]] || continue
+
+				printf "%sExcluding patch: %s%s\"%s${patch_array[i_array]}%s%s\"%s ; parent Wine Git commit: %s${__commit_hash}%s\n" \
+				"${TTYGREEN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+				unset 'patch_array[i_array]'
+				break
+			done
+		done
+	done
+}
+
 # process_staging_exclude()
 #	1>	Staging exclude list
 # ( 2<	Processed staging exclude list )
@@ -773,6 +857,31 @@ function process_staging_exclude()
 	else
 		die "Parameter (2): invalid reference name (${VARIABLE_NAME_REGEXP}): '${__staging_exclude_reference}'"
 	fi
+}
+
+# apply_binpatch_array()
+#	1>  	: Source root directory to which to apply p1 formatted binary patchset
+#	2...N>	: Array of binary patches to apply to Source root directory
+function apply_binpatch_array()
+{
+	((2 <= $#)) || die "Invalid parameter count: ${#} (2-)"
+
+	local		__source_directory="${SOURCE_ROOT}/${1}"
+	local -a	__array_patch_files=("${!2}")
+	local	__binary_patch_file __patch_log
+
+	pushd_wrapper "${__source_directory}"
+	for __binary_patch_file in "${__array_patch_files[@]}"; do
+		[[ -z "${__binary_patch_file}" ]] && continue
+		[[ -f "${__binary_patch_file}" ]] || die "binary patch file \"${__binary_patch_file}\" does not exist"
+
+		printf "%sApplying binary patch file%s: \"%s${__binary_patch_file}%s\" ...\n" \
+			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}" &>"${__FIFO_LOG_PIPE}"
+		"${SOURCE_ROOT}/${WINE_STAGING_PATCHBIN_SCRIPT}" --nogit < "${__binary_patch_file}" &>"${__FIFO_LOG_PIPE}" \
+			|| die "binary patch file: \"${__binary_patch_file}\" failed to apply"
+		# shellcheck disable=SC2181
+	done
+	popd_wrapper
 }
 
 # apply_patch_array()
@@ -1074,7 +1183,7 @@ upgrade_chroot_build_env()
 	schroot_session_run "${session}" "root" "/" \
 		"aptitude update	-q -y" \
 		"aptitude upgrade   -q -y" \
-		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev" \
+		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev" \
 		"apt-get build-dep -q -y -f wine-development" \
 		"aptitude upgrade   -q -y"
 	schroot_session_cleanup "${session}"
@@ -1091,6 +1200,8 @@ function src_fetch()
 	
 	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
+	fetch_and_extract_tarball . "${GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL}" "${GENTOO_WINE_EBUILD_COMMON_PACKAGE}"
+
 	# Fetch Wine-Staging Git Source (if required).
 	# Checkout desired Wine version in Wine-Staging Git tree (clean and update first!!)
 	if ((WINE_STAGING)); then
@@ -1120,37 +1231,25 @@ function src_prepare()
 
 	# (1) Apply base (bundled) & working patches (Wine version dependent)
 	local -a	array_patch_files=(
-					"${SCRIPT_DIRECTORY}/Patches/wine-1.5.26-winegcc.patch"
-					"${SCRIPT_DIRECTORY}/Patches/wine-1.6-memset-O3.patch"
-					"${SCRIPT_DIRECTORY}/Patches/wine_winecfg_detailed_version.patch"
-					"${SCRIPT_DIRECTORY}/Patches/wine-winhlp32-macro-flex-2.6.3-flex.patch"
-				)
-    # shellcheck disable=SC2016
-    if ! grep -q 'WINE_CHECK_SONAME(OSMesa,OSMesaGetProcAddress,,,\[$X_LIBS -lm $X_EXTRA_LIBS\])' "${SOURCE_ROOT}/wine/configure.ac"; then
-        array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-2.6-osmesa-configure_support_recent_versions.patch" )
-    fi
-	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[123](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-2])$ ]]; then
-		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-1.8-gnutls-3.5-compat.patch" )
-	fi
-	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[12](\-unofficial|)|1\.9\.[0-8])$ ]]; then
-		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-sysmacros.patch" )
-	fi
-	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\.[1-3](\-unofficial|)|1\.9\.[0-9]|1\.9\.1[0-3])$ ]]; then
-		array_patch_files+=( "${SCRIPT_DIRECTORY}/Patches/wine-cups-2.2-cupsgetppd-build-fix.patch" )
-	fi
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.5.26-winegcc.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.6-memset-O3.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8_winecfg_detailed_version.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
+	)
+	local -a	array_binpatch_files=(
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-implement_minimum_em_size_required_by_opentype_1.8.2.patch"
+	)
+
 	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
-	if [[ "${__WINE_VERSION}" =~ ^(1\.8|1\.8\..*|1\.9\.[01])$ ]]; then
-		# Apply Gentoo patch to enable support for GStreamer 1.0 libraries (vs. obsolete GStreamer 0.1 libraries)
-		pushd_wrapper "${WORKING_PATCHES_DIRECTORY}"
-		wget -c "${GSTREAMER_PATCH_URL}" &>"${__FIFO_LOG_PIPE}" || die "wget -c \"${GSTREAMER_PATCH_URL}\" failed"
-		bunzip2 -fq "${__GSTREAMER10_PATCH}.patch.bz2"  &>"${__FIFO_LOG_PIPE}" || die "bunzip2 -fq \"${__GSTREAMER10_PATCH}.patch.bz2\" failed"
-		if [[ "${__WINE_VERSION}" == "1.9.1" ]]; then
-			sed -i '1,71d' "${__GSTREAMER10_PATCH}.patch" &>"${__FIFO_LOG_PIPE}" || die "sed failed"
-		fi
-		popd_wrapper
-		array_patch_files+=( "${WORKING_PATCHES_DIRECTORY}/${__GSTREAMER10_PATCH}.patch")
-	fi
+	sieve_patchset_array_by_git_commit "${SOURCE_ROOT}/wine" array_patch_files array_binpatch_files
 	apply_patch_array "wine" array_patch_files[@]
+	apply_binpatch_array "wine" array_binpatch_files[@]
 
 	# (2) Apply Wine-Staging patchset
 	if ((WINE_STAGING)) && [[ -d "${SOURCE_ROOT}/wine-staging" ]]; then
@@ -1181,9 +1280,6 @@ function src_prepare()
  		sed -r -i '/^AC_INIT\(.*\)$/{s/\[Wine\]/\[Wine \(Staging\)\]/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
 		sed -r -i "s/Wine (\\(Staging\\) |)/Wine \\(Staging\\) /" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
 	fi
-	# Update Wine version to include git commit
-	sed -r -i '/^m4_define\(WINE_VERSION.+\)$/{s/\\\(\[\-\.0\-9A\-Za\-z]\+\\\)/\\([-.0-9A-Za-z ]+\\)/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
-	sed -r -i "{s/\\-[[:xdigit:]]{40}//; s/[[:blank:]]*$/ ${__WINE_COMMIT}/}" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
 
 	# (3) Apply user patches. Stored in directories specified in the USER_PATCH_DIRECTORIES[0...N-1] directories array ...
 	apply_user_patches "wine"
@@ -1750,6 +1846,7 @@ EOF_script_config
 			schroot_session_start "${SESSION_WINE32}" "${USERNAME}" "${CHROOT32_NAME}"
 			schroot_session_start "${SESSION_WINE64}" "${USERNAME}" "${CHROOT64_NAME}"
 		fi
+		fetch_wine_staging_patchbin_script "${SOURCE_ROOT}"
 		((SUBCOMMANDS[SRC_FETCH]))		&& src_fetch
 		if ((WINE_STAGING)); then
 			git_get_tag "wine-staging" "__WINE_STAGING_VERSION"
@@ -1809,6 +1906,9 @@ function main()
 			printf "%s\n" "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}..."
 		fi
 
+	# Global name constants
+	declare -r 	GENTOO_WINE_EBUILD_COMMON_PACKAGE="gentoo-wine-ebuild-common"
+
 	# Global versioning defaults
 	declare		WINE_STAGING="${WINE_STAGING:-0}"
 	parse_boolean_option "${WINE_STAGING}" "WINE_STAGING"
@@ -1816,13 +1916,10 @@ function main()
 	declare		__WINE_GIT_TAG	__WINE_STAGING_GIT_TAG
 	declare		__WINE_VERSION	__WINE_STAGING_VERSION
 	
+	# Global script constants
+	declare -r	WINE_STAGING_PATCHBIN_SCRIPT="patchbin.sh"
+	
 	# Global patch constants
-	declare -r 	__GSTREAMER10_PATCH="wine-1.8-gstreamer-1.0"
-
-	# Global URL constants
-	declare -r	GSTREAMER_PATCH_URL="https://dev.gentoo.org/~np-hardass/distfiles/wine/${__GSTREAMER10_PATCH}.patch.bz2"
-	declare	-r	WINE_STAGING_GIT_URL="https://github.com/wine-compholio/wine-staging.git"
-	declare -r	WINE_GIT_URL="git://source.winehq.org/git/wine.git"
 	
 	# Global versioning constants
 	declare -r	SHA1_REGEXP="^[[:xdigit:]]{40}$"
@@ -1832,6 +1929,16 @@ function main()
 	declare -r	WINE_STAGING_PREFIX="v"
 	declare -r	WINE_STAGING_SUFFIX="-unofficial"
 	declare -r	WINE_PREFIX="wine-"
+	declare -r	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20171106"
+
+	# Global URL constants
+	declare	-r	WINE_STAGING_GIT_URL="https://github.com/wine-compholio/wine-staging.git"
+	declare -r	WINE_GIT_URL="git://source.winehq.org/git/wine.git"
+	declare -r	GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL="https://github.com/bobwya/${GENTOO_WINE_EBUILD_COMMON_PACKAGE}/archive/${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}.tar.gz"
+	declare -r	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-compholio/wine-staging/master/patches/gitapply.sh"
+
+	declare -r	WINE_EBUILD_COMMON="${GENTOO_WINE_EBUILD_COMMON_PACKAGE}-${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}"
+
 	((WINE_STAGING)) 	&& set_wine_staging_git_tag 0
 	((WINE_STAGING))	|| set_wine_git_tag 0
 

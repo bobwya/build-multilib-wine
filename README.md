@@ -50,6 +50,10 @@ At present the script has some Environment variables that can be overridden to c
 ```
 Typically one of more of these variables would be set (if required) in the global configuration file.
 
+Backported, Wine build time patches, carried over my Gentoo ebuild, are selectively applied to the Wine Git tree.
+Depending on the Wine Git Commit being built... Any of these patches that are already committed, as a parent commit in the Wine Git tree, are automatically excluded.
+A separate **gentoo_wine_ebuild_common** repository tarball is downloaded to supply this patchset.
+
 All patches from the Wine Staging patch-set are applied by default (except for a small number - that are patched separately from the Wine Staging patch install script). However any number of the Wine Staging (sub-)patch-sets can be selectively disabled. Again this is only possible via overriding Environment variables - typically in the global configuration file.
 
 User patches can applied - any number of directories, containing patch files, can be specified. Thereby allowing a custom Wine version to be built from Source.
