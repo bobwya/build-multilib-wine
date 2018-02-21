@@ -19,6 +19,15 @@ An optional global configuration file is used by, the build script, to specify v
 ```
 *It is recommended new users do this first*. As the configuration file will show what common script options will need to be specfied. This file be edited (as **root**) to suit the users requirements.
 
+The default directory options are typically OK for most users:
+```
+    PREFIX="${HOME}/usr"                    # default install directory - in your user's HOME directory
+    SOURCE_ROOT="${HOME}/Wine/Source"       # default directory for Wine Git source and default patches
+    BUILD_ROOT="${HOME}/Wine/Build"         # default directory for Wine builds
+    LOG_DIRECTORY="${HOME}/Wine/Build/Logs" # default directory for build log files
+```
+All of these directories are shared with both of the Schroot environments.
+ 
 At present the script has some Environment variables that can be overridden to change some advanced options: 
 ```
         WINE_CONFIG_OPTIONS="-without-hal --without-v4l --without-oss"
