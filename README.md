@@ -36,6 +36,18 @@ At present the script has some Environment variables that can be overridden to c
 ```
 Typically one of more of these variables would be set (if required) in the global configuration file.
 
+Finally once you've built your new shiney custom Wine version...
+"How do I run it?" You might ask...
+The default install path is:
+```
+    "${HOME}/usr"
+```
+So to run your custom Wine version use the full path, e.g.:
+```
+    ~/usr/bin/wine ...
+    ~/usr/bin/winecfg
+```
+
 Backported, Wine build time patches, carried over my Gentoo ebuild, are selectively applied to the Wine Git tree.
 Depending on the Wine Git Commit being built... Any of these patches that are already committed, as a parent commit in the Wine Git tree, are automatically excluded.
 A separate **gentoo_wine_ebuild_common** repository tarball is downloaded to supply this patchset.
