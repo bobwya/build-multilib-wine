@@ -894,10 +894,14 @@ function apply_patch_array()
 
 	local		__source_directory="${SOURCE_ROOT}/${1}"
 	local -a	__array_patch_files=("${!2}")
-	local	__patch_file __patch_log
+	local -a	__array_sorted_patch_files
+	local	_IFS_save __patch_file __patch_log
 
+	_IFS_save="${IFS}"
+	IFS=$'\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
+	IFS="${_IFS_save}"
 	pushd_wrapper "${__source_directory}"
-	for __patch_file in "${__array_patch_files[@]}"; do
+	for __patch_file in "${__array_sorted_patch_files[@]}"; do
 		[[ -z "${__patch_file}" ]] && continue
 		[[ -f "${__patch_file}" ]] || die "patch file \"${__patch_file}\" does not exist"
 
@@ -1184,7 +1188,7 @@ upgrade_chroot_build_env()
 	schroot_session_run "${session}" "root" "/" \
 		"aptitude update	-q -y" \
 		"aptitude upgrade   -q -y" \
-		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev" \
+		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev libsdl2-dev libvulkan-dev" \
 		"apt-get build-dep -q -y -f wine-development" \
 		"aptitude upgrade   -q -y"
 	schroot_session_cleanup "${session}"
@@ -1943,7 +1947,7 @@ function main()
 	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20171106"
 
 	# Global URL constants
-	export	WINE_STAGING_GIT_URL="https://github.com/wine-compholio/wine-staging.git"
+	export	WINE_STAGING_GIT_URL="https://github.com/wine-staging/wine-staging.git"
 	export	WINE_GIT_URL="git://source.winehq.org/git/wine.git"
 	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL="https://github.com/bobwya/${GENTOO_WINE_EBUILD_COMMON_PACKAGE}/archive/${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}.tar.gz"
 	export	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-compholio/wine-staging/master/patches/gitapply.sh"
