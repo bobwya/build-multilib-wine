@@ -1980,15 +1980,18 @@ function main()
 	
 	# Global schroot constants
 	export		LSB_CODENAME
-	[[ -z "${LSB_CODENAME}" ]] && LSB_CODENAME="$(lsb_release -sc)"
+	if [[ -z "${LSB_CODENAME}" ]]; then
+        LSB_CODENAME="$(lsb_release -sc)"
+        LSB_CODENAME="${LSB_CODENAME,,}"
+    fi
 	# Reverse-mangle the stupid Linux Mint Release Code Name overrides
-	case "${LSB_CODENAME^^}" in
-        SYLVIA|SONYA|SERENA|SARAH)
-            LSB_CODENAME="Xenial";;
-        ROSA|RAFAELA|REBECCA|QIANA)
-            LSB_CODENAME="Trusty";;
-        BETSY)
-            LSB_CODENAME="Jessie";;
+	case "${LSB_CODENAME}" in
+        sylvia|sonya|serena|sarah)
+            lsb_codename="xenial";;
+        rosa|rafaela|rebecca|qiana)
+            lsb_codename="trusty";;
+        betsy)
+            lsb_codename="jessie";;
     esac
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
