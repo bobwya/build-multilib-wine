@@ -61,7 +61,7 @@ function die()
 				else
 					printf("%s\"%s%s%s\"", ttyreset, ttycyan_bold, $i, ttyreset)
 			}
-			printf("\\n")
+			printf("\n")
 		}' >&2
 		((usage)) 	&& usage_information >&2
 	cleanup
