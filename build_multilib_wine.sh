@@ -1987,11 +1987,11 @@ function main()
 	# Reverse-mangle the stupid Linux Mint Release Code Name overrides
 	case "${LSB_CODENAME}" in
         sylvia|sonya|serena|sarah)
-            lsb_codename="xenial";;
+            LSB_CODENAME="xenial";;
         rosa|rafaela|rebecca|qiana)
-            lsb_codename="trusty";;
+            LSB_CODENAME="trusty";;
         betsy)
-            lsb_codename="jessie";;
+            LSB_CODENAME="jessie";;
     esac
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
