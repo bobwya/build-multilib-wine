@@ -27,7 +27,7 @@ function trap_exit()
 {
 	# shellcheck disable=SC2173
 	trap '' ABRT INT QUIT TERM KILL STOP
-	printf "\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYRED_BOLD}" "${TTYRESET}"
+	printf "\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYRED_BOLD}" "${TTYRESET}"
 	cleanup
 	exit
 }
@@ -61,7 +61,7 @@ function die()
 				else
 					printf("%s\"%s%s%s\"", ttyreset, ttycyan_bold, $i, ttyreset)
 			}
-			printf("\n")
+			printf("\\n")
 		}' >&2
 		((usage)) 	&& usage_information >&2
 	cleanup
@@ -267,10 +267,6 @@ function set_log_compression()
 			which lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
 			export COMPRESSOR_CMD="lzop -fqU -9"
 			;;
-		lzop)
-			which lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
-			export COMPRESSOR_CMD="lzop -fqU -9"
-			;;
 		lz4)
 			which lz4 &>/dev/null || die "lz4 log compression unsupported - lz4 compressor not installed"
 			export COMPRESSOR_CMD="lz4 -cfq -BD -9"
@@ -297,7 +293,7 @@ function logging_thread()
 		((LOGGING))		&& cat < "${__FIFO_LOG_PIPE}" | tee -a "${LOG}"
 		((LOGGING))		|| cat < "${__FIFO_LOG_PIPE}"
 	done
-	printf "\n%sLogging completed!!%s\n" "${TTYYELLOW_BOLD}" "${TTYRESET}"
+	printf "\\n%sLogging completed!!%s\\n" "${TTYYELLOW_BOLD}" "${TTYRESET}"
 }
 
 # setup_logging()
@@ -328,9 +324,9 @@ function setup_logging()
 		esac
 		[[ -d "${LOG_DIRECTORY}" ]] || mkdir -p "${LOG_DIRECTORY}" &>/dev/null
 		rm "${LOG}" &>/dev/null
-		printf "%s\n" "${TTYCYAN_BOLD}Finished setting up FIFO logging using: ${TTYBLUE_BOLD}${LOG}${TTYRESET}"
+		printf "%s\\n" "${TTYCYAN_BOLD}Finished setting up FIFO logging using: ${TTYBLUE_BOLD}${LOG}${TTYRESET}"
 	else
-		printf "%s\n" "${TTYCYAN_BOLD}Logging disabled${TTYRESET}"
+		printf "%s\\n" "${TTYCYAN_BOLD}Logging disabled${TTYRESET}"
 	fi
 	
 	logging_thread &
@@ -351,7 +347,7 @@ function fetch_wine_staging_patchbin_script()
 	pushd_wrapper "${__scripts_directory}"
 	wget -O "${WINE_STAGING_PATCHBIN_SCRIPT}" "${WINE_STAGING_BINPATCH_URL}" \
 		|| die "wget failed: unable to download Wine Staging gitapply.sh script: \"${WINE_STAGING_BINPATCH_URL}\""
-	sed -E -i "s/(\.\/)?gitapply(\.sh)?/${WINE_STAGING_PATCHBIN_SCRIPT}/g" "${WINE_STAGING_PATCHBIN_SCRIPT}" \
+	sed -E -i "s/(\\.\\/)?gitapply(\\.sh)?/${WINE_STAGING_PATCHBIN_SCRIPT}/g" "${WINE_STAGING_PATCHBIN_SCRIPT}" \
 		|| die "sed failed: patching Wine Staging gitapply.sh (${WINE_STAGING_PATCHBIN_SCRIPT}) script"
 	chmod +x "${WINE_STAGING_PATCHBIN_SCRIPT}" \
 		|| die "chmod +x failed"
@@ -377,18 +373,18 @@ function check_package_dependencies()
 		esac
 	done
 	if [[ ! -z "${package_list}" ]]; then
-		printf "sudo apt-get install %s${package_list}%s\n" "${TTYCYAN}" "${TTYRESET}" >&2
+		printf "sudo apt-get install %s${package_list}%s\\n" "${TTYCYAN}" "${TTYRESET}" >&2
 	elif ! which netselect &>/dev/null; then
 		package_list="${package_list} netselect"
-		printf "Please manually install the %snetselect%s package from this Debian repository:\n" \
+		printf "Please manually install the %snetselect%s package from this Debian repository:\\n" \
 				"${TTYCYAN_BOLD}" "${TTYRESET}" >&2
-		printf "  %shttps://packages.debian.org/stretch/amd64/netselect/download%s\n\n" \
+		printf "  %shttps://packages.debian.org/stretch/amd64/netselect/download%s\\n\\n" \
 				"${TTYBLUE_BOLD}" "${TTYRESET}" >&2
-		printf "For example to install the %snetselect%s %sdeb%s package file from the main Debian USA mirror use:\n" \
+		printf "For example to install the %snetselect%s %sdeb%s package file from the main Debian USA mirror use:\\n" \
 				"${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYRESET}" >&2
-		printf "  URL='%shttp://ftp.debian.org/debian/pool/main/n/netselect/netselect_0.3.ds1-28+b1_amd64.deb%s' %s;%s\n" \
+		printf "  URL='%shttp://ftp.debian.org/debian/pool/main/n/netselect/netselect_0.3.ds1-28+b1_amd64.deb%s' %s;%s\\n" \
 				"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" >&2
-		printf "  FILE=\$(%smktemp%s) %s;%s %swget%s \"\${URL}\" -qO \"\${FILE}\" && %ssudo dpkg%s -i \"\${FILE}\" %s;%s %srm%s \"\${FILE}\"\n\n" \
+		printf "  FILE=\$(%smktemp%s) %s;%s %swget%s \"\${URL}\" -qO \"\${FILE}\" && %ssudo dpkg%s -i \"\${FILE}\" %s;%s %srm%s \"\${FILE}\"\\n\\n" \
 				"${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" \
 				"${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}" >&2
 	fi
@@ -402,144 +398,144 @@ function usage_information()
 
 	local indent=-2 col_width=-15 gopt_col_width=-20
 
-	printf "Usage:\n"
-	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] %ssetup-chroot%s\n" \
+	printf "Usage:\\n"
+	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] %ssetup-chroot%s\\n" \
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
-	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] %supgrade-chroot%s\n" \
+	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] %supgrade-chroot%s\\n" \
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
-	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] [%sBUILD-OPTION%s(s)] %ssrc-fetch | src-prepare | src-configure | src-compile | src-install%s\n" \
+	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] [%sBUILD-OPTION%s(s)] %ssrc-fetch | src-prepare | src-configure | src-compile | src-install%s\\n" \
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYYELLOW}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
-	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] [%sBUILD-OPTION%s(s)] %sbuild-all%s\n\n" \
+	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] [%sBUILD-OPTION%s(s)] %sbuild-all%s\\n\\n" \
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYYELLOW}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		
-	printf "Utility to build dual-architecture, multilib Wine on Ubuntu(tm).\n"
-	printf "Uses dual (32-bit and 64-bit) Chroot (schroot) Environments.\n\n"
-	printf "Consecutive build phases can be selected, chained, and re-run.\n\n"
+	printf "Utility to build dual-architecture, multilib Wine on Ubuntu(tm).\\n"
+	printf "Uses dual (32-bit and 64-bit) Chroot (schroot) Environments.\\n\\n"
+	printf "Consecutive build phases can be selected, chained, and re-run.\\n\\n"
 
-	printf "%scommand%s(s) :\n" "${TTYCYAN_BOLD}" "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%scommand%s(s) :\\n" "${TTYCYAN_BOLD}" "${TTYRESET}"
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "generate-conf" "${TTYRESET}" ${indent} "" "Generate default \"${SCRIPT_CONFIG}\" configuration file."
-	printf "%*s%s%*s%s%*s%s%s%s\n" \
+	printf "%*s%s%*s%s%*s%s%s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "${TTYRED_BOLD}" "This command runs as root." "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "setup-chroot" "${TTYRESET}" ${indent} "" "Setup 32-bit and 64-bit Chroot Environments."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Install Ubuntu base development libraries for Wine"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "in the dual Chroot Environments. "
-	printf "%*s%s%*s%s%*s%s%s%s\n" \
+	printf "%*s%s%*s%s%*s%s%s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "${TTYRED_BOLD}" "This command runs as root." "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "upgrade-chroot" "${TTYRESET}" ${indent} "" "Upgrade Ubuntu base development libraries for Wine"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "in the dual Chroot Environments. "
-	printf "%*s%s%*s%s%*s%s%s%s\n" \
+	printf "%*s%s%*s%s%*s%s%s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "${TTYRED_BOLD}" "This command runs as root." "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "version" "${TTYRESET}" ${indent} "" "Display build version of ${SCRIPT_NAME} ."
-	printf "\n\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_FETCH})" "${TTYCYAN_BOLD}" ${col_width} "src-fetch" "${TTYRESET}" ${indent} "" "Run (Git) source fetch phase."
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_PREPARE})" "${TTYCYAN_BOLD}" ${col_width} "src-prepare" "${TTYRESET}" ${indent} "" "Run source preparation (patching) phase."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "If building Wine-Staging - the Staging patches will be"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "applied during this phase."
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_CONFIGURE})" "${TTYCYAN_BOLD}" ${col_width} "src-configure" "${TTYRESET}" ${indent} "" "Run source configuration phase."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "This phase is executed in the dual Chroot Environments."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Phase includes a make clean operation (if required)."
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_COMPILE})" "${TTYCYAN_BOLD}" ${col_width} "src-compile" "${TTYRESET}" ${indent} "" "Run source compilation phase."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "This phase is executed in the dual Chroot Environments."
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_INSTALL})" "${TTYCYAN_BOLD}" ${col_width} "src-install" "${TTYRESET}" ${indent} "" "Run installation phase."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "This phase is executed in the dual Chroot Environments."
 
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "(${SRC_FETCH})-(${SRC_INSTALL})" "${TTYCYAN_BOLD}" ${col_width} "build-all" "${TTYRESET}" ${indent} "" "Specifies that all phases (see above)"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "will be executed in a chain."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Note: multiple phases can also be specified"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent-6)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "individually and these will be chained together."
-	printf "%sGLOBAL-OPTION%s :\n" "${TTYGREEN}" "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%sGLOBAL-OPTION%s :\\n" "${TTYGREEN}" "${TTYRESET}"
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--colour[=][y|n|yes|no] | -c[=][y|n|yes|no] " "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n\n" \
+	printf "%*s%s%*s%s%*s%s\\n\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Enable/disable colourised console output. [default=no]"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--logging[=][y|n|yes|no]" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n\n" \
+	printf "%*s%s%*s%s%*s%s\\n\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Enable/disable logging of operations.	 [default=yes]"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--log-compression[=][bzip2|gzip|lzma|lzop|none|lz4|xz]" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n\n" \
+	printf "%*s%s%*s%s%*s%s\\n\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify (optional) log file compression.  [default=gzip]"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--log-directory" "${TTYRESET}" ${indent} "" "Specify directory in which log files will be created during build."
-	printf "\n"
-	printf "%sBUILD-OPTION%s :\n" "${TTYYELLOW}" "${TTYRESET}"
-	printf "\n"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "\\n"
+	printf "%sBUILD-OPTION%s :\\n" "${TTYYELLOW}" "${TTYRESET}"
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-staging[=][y|n|yes|no]" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify whether to build Wine or Wine-Staging."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-branch[=]branch" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify Wine Git branch to build."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-commit[=]SHA-1 commit hash" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify Wine Git commit to build."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Use 40 character hexidecimal SHA-1 hash."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-staging-branch[=]branch" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify Wine-Staging Git branch to build."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-staging-commit[=]SHA-1 commit hash" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify Wine-Staging Git commit to build."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Use 40 character hexidecimal SHA-1 hash."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--wine-version[=]numeric-version" "${TTYRESET}" ${indent} "" ""
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Specify Wine (or Wine-Staging) version to build."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Use numeric version string (e.g. 1.9.20 1.8.5-rc1)"
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--build-directory" "${TTYRESET}" ${indent} "" "Specify build (binaries) target directory."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--patch-directory" "${TTYRESET}" ${indent} "" "Specify directory containing user patch files."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Can be specified more than once."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--source-directory" "${TTYRESET}" ${indent} "" "Specify directory to store source files."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "" "${TTYRESET}" ${indent} "" "Note: this can be specified more than once."
-	printf "%*s%s%*s%s%*s%s\n" \
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYYELLOW}" ${gopt_col_width} "--prefix" "${TTYRESET}" ${indent} "" "Specify prefix directory for installation phase."
-	printf "\n"
+	printf "\\n"
 }
 
 # display_completion_message()
@@ -548,7 +544,7 @@ function display_completion_message()
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
 	if [[ "${COMMAND}" != "build" ]]; then
-		printf "\n%s%s%s: %sChroot-${COMMAND} has completed successfully%s ...\n" \
+		printf "\\n%s%s%s: %sChroot-${COMMAND} has completed successfully%s ...\\n" \
 			"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}"
 	else
 		local	-a build_phases=("" "src-fetch" "src-prepare" "src-configure" "src-compile" "src-install")
@@ -565,7 +561,7 @@ function display_completion_message()
 		((count!=1)) && phases_completed="Build phases: ${phases_completed:1}; have completed successfully, "
 		((WINE_STAGING))	|| local	wine_version="${__WINE_VERSION}"
 		((WINE_STAGING))	&& local	wine_version="(Staging) ${__WINE_STAGING_VERSION}"
-		printf "\n%s%s%s: %s${phases_completed} for Wine ${wine_version}%s ...\n" \
+		printf "\\n%s%s%s: %s${phases_completed} for Wine ${wine_version}%s ...\\n" \
 				"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}"
 	fi
 }
@@ -658,7 +654,7 @@ function git_clone()
 	fi
 	[[ -d "${git_directory}/.git" ]] && return 0
 
-	printf "%s\n" "${TTYCYAN_BOLD}Cloning \"${TTYBLUE_BOLD}${git_repository_url}${TTYRESET}\" into ${TTYBLUE_BOLD}${git_directory}${TTYRESET} ..."
+	printf "%s\\n" "${TTYCYAN_BOLD}Cloning \"${TTYBLUE_BOLD}${git_repository_url}${TTYRESET}\" into ${TTYBLUE_BOLD}${git_directory}${TTYRESET} ..."
 	git clone "${git_repository_url}" \
 		|| die "git clone \"${git_repository_url}\" failed (\"${1}\")" $?
 }
@@ -748,7 +744,7 @@ function wine_staging_get_upstream_commit()
 	__git_commit=$( patches/patchinstall.sh --upstream-commit )
 	[[ "${__git_commit}" =~ ${SHA1_REGEXP} ]] \
 		|| die "unable to get Wine commit corresponding to Wine-Staging commit: \"${__wine_staging_git_commit}\""
-	printf "%sChecking out Wine commit: %s${__git_commit}%s ; corresponding to Wine-Staging commit: %s${__wine_staging_git_commit}%s\n" \
+	printf "%sChecking out Wine commit: %s${__git_commit}%s ; corresponding to Wine-Staging commit: %s${__wine_staging_git_commit}%s\\n" \
 				"${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYRESET}"
 	popd_wrapper
 
@@ -798,7 +794,7 @@ sieve_patchset_array_by_git_commit() {
 			do
 				[[ "${__git_log}" =~ ${__commit_hash} ]] || continue
 
-				printf "%sExcluding patch: %s%s\"%s${patch_array[i_array]}%s%s\"%s ; parent Wine Git commit: %s${__commit_hash}%s\n" \
+				printf "%sExcluding patch: %s%s\"%s${patch_array[i_array]}%s%s\"%s ; parent Wine Git commit: %s${__commit_hash}%s\\n" \
 				"${TTYGREEN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYCYAN_BOLD}" "${TTYRESET}" "${TTYGREEN}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYRESET}"
 				unset 'patch_array[i_array]'
 				break
@@ -846,7 +842,7 @@ function process_staging_exclude()
 				}
 			}
 			END{
-				printf("\n")
+				printf("\\n")
 			}' 2>/dev/null
 	)
 	
@@ -877,7 +873,7 @@ function apply_binpatch_array()
 		[[ -z "${__binary_patch_file}" ]] && continue
 		[[ -f "${__binary_patch_file}" ]] || die "binary patch file \"${__binary_patch_file}\" does not exist"
 
-		printf "%sApplying binary patch file%s: \"%s${__binary_patch_file}%s\" ...\n" \
+		printf "%sApplying binary patch file%s: \"%s${__binary_patch_file}%s\" ...\\n" \
 			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		"${SOURCE_ROOT}/${WINE_STAGING_PATCHBIN_SCRIPT}" --nogit < "${__binary_patch_file}" \
 			|| die "binary patch file: \"${__binary_patch_file}\" failed to apply"
@@ -898,20 +894,21 @@ function apply_patch_array()
 	local	_IFS_save __patch_file __patch_log
 
 	_IFS_save="${IFS}"
-	IFS=$'\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
+	# shellcheck disable=SC2207
+	IFS=$'\\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
 	IFS="${_IFS_save}"
 	pushd_wrapper "${__source_directory}"
 	for __patch_file in "${__array_sorted_patch_files[@]}"; do
 		[[ -z "${__patch_file}" ]] && continue
 		[[ -f "${__patch_file}" ]] || die "patch file \"${__patch_file}\" does not exist"
 
-		printf "%sApplying patch file%s: \"%s${__patch_file}%s\" ...\n" \
+		printf "%sApplying patch file%s: \"%s${__patch_file}%s\" ...\\n" \
 			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		__patch_log="$(patch --verbose -p1 < "${__patch_file}" || false)"
 		# shellcheck disable=SC2181
 		if (($?)); then
-			printf "%s\n" "${TTYYELLOW}${__patch_log}${TTYRESET}"
-			die "patch file: \"${__patch_file}\" failed to apply\n" $?
+			printf "%s\\n" "${TTYYELLOW}${__patch_log}${TTYRESET}"
+			die "patch file: \"${__patch_file}\" failed to apply\\n" $?
 		fi
 	done
 	popd_wrapper
@@ -928,11 +925,11 @@ function apply_patch_directory()
 			__patch_file
 
 	if [[ ! -d "${patch_directory}" ]]; then
-		printf "%sIgnoring non-existent patch directory%s: \"%s${patch_directory}%s\"\n" \
+		printf "%sIgnoring non-existent patch directory%s: \"%s${patch_directory}%s\"\\n" \
 				"${TTYRED_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		return 1
 	else
-		printf "%sApplying patches from patch directory%s: \"%s${patch_directory}%s\" ...\n" \
+		printf "%sApplying patches from patch directory%s: \"%s${patch_directory}%s\" ...\\n" \
 				"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYBLUE}" "${TTYRESET}"
 		local array_patch_files=()
 		while IFS=  read -r -d $'\0'; do
@@ -1119,9 +1116,9 @@ EOF_Schroot_wine
 		# Append host locale & keyboard default configuration files to schroot copyfiles configuration file.
 		# sed command only appends file names - if not already present.
 		if [[ -f "${path}" ]]; then
-			sed -i -e "\|${path}|h; \${x;s|${path}||;{g;t};a\\" -e "${path}" -e "}" "/etc/schroot/default/copyfiles"
+			sed -i -e "\\|${path}|h; \${x;s|${path}||;{g;t};a\\" -e "${path}" -e "}" "/etc/schroot/default/copyfiles"
 		else
-			sed -i "\|${path}|d" "/etc/schroot/default/copyfiles"
+			sed -i "\\|${path}|d" "/etc/schroot/default/copyfiles"
 		fi
 	done
 	printf "%s" "${TTYPURPLE}"
@@ -1147,10 +1144,10 @@ setup_chroot_build_env()
 	if [[ ! -f "${chroot_path}/etc/locale.gen" ]]; then
 		# Generate a dummy /etc/locale.gen file for Schroot (as host system does not have a candidate file)
 		grep -s "${locale_lang}" "${chroot_path}/usr/share/i18n/SUPPORTED" > "${chroot_path}/etc/locale.gen"
-		printf "en_US.UTF-8 UTF-8\n" >> "${chroot_path}/etc/locale.gen"
+		printf "en_US.UTF-8 UTF-8\\n" >> "${chroot_path}/etc/locale.gen"
 	else
 		# Set valid locales in /etc/locale.gen file for Schroot (as host system does not have a candidate file)
-		sed -i -e "\|${locale_lang}|{s|^\#[[:blank:]]\+||}" -e "\|en_US.UTF-8|{s|^\#[[:blank:]]\+||}" \
+		sed -i -e "\\|${locale_lang}|{s|^\\#[[:blank:]]\\+||}" -e "\\|en_US.UTF-8|{s|^\\#[[:blank:]]\\+||}" \
 			"${chroot_path}/etc/locale.gen"
 	fi
 	schroot_session_start "${session}" "root" "${chroot_name}"
@@ -1201,7 +1198,7 @@ function src_fetch()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
 	
 	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
@@ -1229,7 +1226,7 @@ function src_prepare()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
 
 	local	md5hash
 	md5hash="$(md5sum "${SOURCE_ROOT}/wine/server/protocol.def" || die "md5sum failed")"
@@ -1271,7 +1268,7 @@ function src_prepare()
 				sed -i '\|^diff \-\-git a/programs/winecfg/about.c|,+12d' \
 					"patches/winecfg-Staging/0001-winecfg-Add-staging-tab-for-CSMT.patch" &>/dev/null
 			fi
-			printf "%sApplying Wine-Staging patchset %s...\n%spatchinstall.sh %sDESTDIR=\"%s${SOURCE_ROOT}/wine%s\" --no-autoconf --all ${staging_exclude}%s\n" \
+			printf "%sApplying Wine-Staging patchset %s...\\n%spatchinstall.sh %sDESTDIR=\"%s${SOURCE_ROOT}/wine%s\" --no-autoconf --all ${staging_exclude}%s\\n" \
 					"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYGREEN_BOLD}" "${TTYBLUE_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN}"
 			# shellcheck disable=SC2086
 			patches/patchinstall.sh DESTDIR="${SOURCE_ROOT}/wine" --no-autoconf --all ${staging_exclude} \
@@ -1296,7 +1293,7 @@ function src_prepare()
 	schroot_session_run "${SESSION_WINE32}" "${USERNAME}" "" \
 		"autoreconf"
 	if ! md5sum -c - <<<"${md5hash}" &>/dev/null; then
-		printf "\"%s${PWD}/protocol.def%s\"%s was patched; running \"%s${PWD}/tools/make_requests%s\" ... \n" \
+		printf "\"%s${PWD}/protocol.def%s\"%s was patched; running \"%s${PWD}/tools/make_requests%s\" ... \\n" \
 			"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYCYAN_BOLD}" "${TTYRESET}" 
 		tools/make_requests || die "\"${PWD}/tools/make_requests\" failed"
 	fi
@@ -1308,7 +1305,7 @@ function multilib_src_configure()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
 
 	export	CFLAGS="${WINE_CFLAGS}"
 
@@ -1334,7 +1331,7 @@ function multilib_src_compile()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
 
 	# Build 64-bit wine64
 	pushd_wrapper "${BUILD_ROOT}/wine64"
@@ -1363,7 +1360,7 @@ function multilib_src_install()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	printf "\n\n%s${FUNCNAME[ 0 ]} ()%s ... \n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
 
 	# Install Wine (32-bit) binaries in specified PREFIX path
 	pushd_wrapper "${BUILD_ROOT}/wine32"
@@ -1442,7 +1439,7 @@ function screen_conf_file()
 				error1=1
 			invalid=invalid || error1 || error2
 			if (error1 || error2) {
-				printf("%s(%04d)%s %s%s%s=%s%s%s\n", ttycyan_bold, NR, ttyreset,
+				printf("%s(%04d)%s %s%s%s=%s%s%s\\n", ttycyan_bold, NR, ttyreset,
 										(error1 ? ttyred_bold : ""), variable, (error1 ? ttyreset : ""),
 										(error2 ? ttyred_bold : ""), value, (error2 ? ttyreset : ""))
 			}
@@ -1687,7 +1684,7 @@ function execute_commands()
 	conf)
 		export DATE_STAMP
 		DATE_STAMP=$(date)
-		printf "\n%s\n" "${TTYWHITE}Generating default configuration file: \"${TTYCYAN_BOLD}${SCRIPT_CONFIG}${TTYRESET}${TTYWHITE}\"${TTYRESET} ..."
+		printf "\\n%s\\n" "${TTYWHITE}Generating default configuration file: \"${TTYCYAN_BOLD}${SCRIPT_CONFIG}${TTYRESET}${TTYWHITE}\"${TTYRESET} ..."
 		# shellcheck disable=SC2016
 		su -p -c '
 			(
@@ -1772,6 +1769,9 @@ function execute_commands()
 # Make options to use when compiling wine.                [src-compile]
 # WINE_MAKE_OPTIONS="${WINE_MAKE_OPTIONS}" # default
 #
+#
+# OS Version Override (e.g. cross-building for another Debian / Ubuntu version)
+# LSB_CODENAME="" # default: lsb_release -sc
 EOF_script_config
 				) > "${SCRIPT_CONFIG}"
 		' root || die "Failed to generate default configuration file: \"${SCRIPT_CONFIG}\""
@@ -1788,20 +1788,20 @@ EOF_script_config
 
 			# shellcheck disable=SC2016
 			su -p -c '
-				printf "\n%s\n" "${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ..."
+				printf "\\n%s\\n" "${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ..."
 				export		UBUNTU_MIRROR_URI
 				UBUNTU_MIRROR_URI="$(get_ubuntu_mirror)"
-				printf "\n${TTYWHITE_BOLD}Creating 32-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Creating 32-bit Chroot Environment${TTYRESET} ...\\n"
 				bootstrap_schroot_image "'"${LSB_CODENAME}_wine_32bit"'" "i386"
-				printf "\n${TTYWHITE_BOLD}Creating 64-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Creating 64-bit Chroot Environment${TTYRESET} ...\\n"
 				bootstrap_schroot_image "'"${LSB_CODENAME}_wine_64bit"'" "amd64"
-				printf "\n${TTYWHITE_BOLD}Installing Ubuntu image to 32-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Installing Ubuntu image to 32-bit Chroot Environment${TTYRESET} ...\\n"
 				setup_chroot_build_env "'"${LSB_CODENAME}_wine_32bit"'"
-				printf "\n${TTYWHITE_BOLD}Installing Ubuntu image to 64-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Installing Ubuntu image to 64-bit Chroot Environment${TTYRESET} ...\\n"
 				setup_chroot_build_env "'"${LSB_CODENAME}_wine_64bit"'"
-				printf "\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 32-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 32-bit Chroot Environment${TTYRESET} ...\\n"
 				upgrade_chroot_build_env "'"${LSB_CODENAME}_wine_32bit"'"
-				printf "\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 64-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Install Updated Wine Development packages to 64-bit Chroot Environment${TTYRESET} ...\\n"
 				upgrade_chroot_build_env "'"${LSB_CODENAME}_wine_64bit"'"
 			' root || die "Failed to setup Chroot environments"
 		} &>"${__FIFO_LOG_PIPE}"
@@ -1819,26 +1819,26 @@ EOF_script_config
 			done < <(schroot -l)
 			if ((!found32bit_chroot && !found64bit_chroot)); then
 				if ((!found32bit_chroot)); then
-					printf "%sChroot Environment%s: \"%s${CHROOT32_NAME}%s\"%s ; has not yet been created.%s\n" \
+					printf "%sChroot Environment%s: \"%s${CHROOT32_NAME}%s\"%s ; has not yet been created.%s\\n" \
 							"${TTYRED_BOLD}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}" "${TTYRED_BOLD}" >&2
 				fi
 				if ((!found64bit_chroot)); then
-					printf "%sChroot Environment%s: \"%s${CHROOT64_NAME}%s\"%s ; has not yet been created.%s\n" \
+					printf "%sChroot Environment%s: \"%s${CHROOT64_NAME}%s\"%s ; has not yet been created.%s\\n" \
 							"${TTYRED_BOLD}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}" "${TTYRED_BOLD}" >&2
 				fi
 				die "Please run: \"${SCRIPT_NAME} setup-chroot\" ; initially - to setup Chroot Environments"
 			fi
 			# shellcheck disable=SC2016
 			su -p -c '
-				printf "\n${TTYWHITE_BOLD}Upgrade Wine Development packages in 32-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Upgrade Wine Development packages in 32-bit Chroot Environment${TTYRESET} ...\\n"
 				upgrade_chroot_build_env ''"${LSB_CODENAME}_wine_32bit"''
-				printf "\n${TTYWHITE_BOLD}Upgrade Wine Development packages in 64-bit Chroot Environment${TTYRESET} ...\n"
+				printf "\\n${TTYWHITE_BOLD}Upgrade Wine Development packages in 64-bit Chroot Environment${TTYRESET} ...\\n"
 				upgrade_chroot_build_env ''"${LSB_CODENAME}_wine_64bit"''
 			' root || die "Failed to upgrade Chroot environments"
 		} &>"${__FIFO_LOG_PIPE}"
 		;;
 	version)
-		printf "\n%s${SCRIPT_NAME} version%s: %s${SCRIPT_VERSION}%s ...\n" \
+		printf "\\n%s${SCRIPT_NAME} version%s: %s${SCRIPT_VERSION}%s ...\\n" \
 				"${TTYCYAN}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}"
 		;;			
 	build)
@@ -1882,9 +1882,11 @@ function main()
 	SCRIPT_PATH="$(readlink -f "${0}")"
 	SCRIPT_DIRECTORY="$(dirname "${SCRIPT_PATH}")"
 	SCRIPT_NAME="$(basename "${SCRIPT_PATH}")"
-	pushd "${SCRIPT_PATH}" &>/dev/null
-	SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
-	popd &>/dev/null
+	if pushd "${SCRIPT_PATH}" &>/dev/null; then
+        SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
+        # shellcheck disable=SC2164
+        popd &>/dev/null
+    fi
 	export		SCRIPT_CONFIG="/etc/${SCRIPT_NAME%.sh}.conf"
 
 	declare -a	USER_PATCH_DIRECTORIES
@@ -1897,7 +1899,7 @@ function main()
 	export	WINE_COMMIT WINE_STAGING_COMMIT
 
 	# Global patch constants
-	#shellcheck disable=SC2031
+	# shellcheck disable=SC2031
 	export  WINE_STAGING_EXCLUDE
 
 	# Read in main parameters from global .conf file for script (default: /etc/build_multilib_wine.conf)
@@ -1919,10 +1921,10 @@ function main()
 	if (( EUID == 0 )); then
 			die "do not run this script as root - you will asked for full root privileges as required!!"
 	else
-		printf "%s\n" "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}..."
+		printf "%s\\n" "${TTYRED_BOLD}warning${TTYRESET}: ${TTYCYAN_BOLD}this script may require to run as ${TTYRED_BOLD}root${TTYRESET} - ${TTYCYAN_BOLD}you must therefore have a ${TTYRED_BOLD}root${TTYCYAN_BOLD} password set${TTYRESET}..."
 	fi
 	if [[ -f "${SCRIPT_CONFIG}" ]]; then
-		printf "Read global configuration file: \"%s\"...\n" "${TTYBLUE_BOLD}${SCRIPT_CONFIG}${TTYRESET}"
+		printf "Read global configuration file: \"%s\"...\\n" "${TTYBLUE_BOLD}${SCRIPT_CONFIG}${TTYRESET}"
 	fi
 	# Global name constants
 	export 	GENTOO_WINE_EBUILD_COMMON_PACKAGE="gentoo-wine-ebuild-common"
@@ -1939,8 +1941,8 @@ function main()
 	# Global versioning constants
 	export	SHA1_REGEXP="^[[:xdigit:]]{40}$"
 	export	VARIABLE_NAME_REGEXP="^[_[:alpha:]][_[:alnum:]]+$"
-	export	VERSION_REGEXP="^[[:digit:]]{1,2}\.[[:digit:]]{1,2}(\.[[:digit:]]{1,2}|)(\-rc[[:digit:]]{1}|)$"
-	export	STABLE_VERSION_REGEXP="^1\.8\.[[:digit:]]{1,2}$"
+	export	VERSION_REGEXP="^[[:digit:]]{1,2}\\.[[:digit:]]{1,2}(\\.[[:digit:]]{1,2}|)(\\-rc[[:digit:]]{1}|)$"
+	export	STABLE_VERSION_REGEXP="^1\\.8\\.[[:digit:]]{1,2}$"
 	export	WINE_STAGING_PREFIX="v"
 	export	WINE_STAGING_SUFFIX="-unofficial"
 	export	WINE_PREFIX="wine-"
@@ -1978,7 +1980,16 @@ function main()
 	
 	# Global schroot constants
 	export		LSB_CODENAME
-	LSB_CODENAME="$(lsb_release -sc)"
+	[[ -z "${LSB_CODENAME}" ]] && LSB_CODENAME="$(lsb_release -sc)"
+	# Reverse-mangle the stupid Linux Mint Release Code Name overrides
+	case "${LSB_CODENAME^^}" in
+        SYLVIA|SONYA|SERENA|SARAH)
+            LSB_CODENAME="Xenial";;
+        ROSA|RAFAELA|REBECCA|QIANA)
+            LSB_CODENAME="Trusty";;
+        BETSY)
+            LSB_CODENAME="Jessie";;
+    esac
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
 	export		SESSION_WINE_INITIALISE="session:wine_initialise"
