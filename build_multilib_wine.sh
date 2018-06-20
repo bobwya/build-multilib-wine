@@ -247,32 +247,32 @@ function set_log_compression()
 	local compressor="${1}"
 	case "${compressor}" in
 		bzip2|bz2)
-			which bzip2 &>/dev/null || die "bzip2 log compression unsupported - bzip2 compressor not detected"
+			command -v bzip2 &>/dev/null || die "bzip2 log compression unsupported - bzip2 compressor not detected"
 			export COMPRESSOR_CMD="bzip2 -fq -9"
 			;;
 		gzip|gz)
-			which gzip &>/dev/null || die "gzip log compression unsupported - gzip compressor not installed"
+			command -v gzip &>/dev/null || die "gzip log compression unsupported - gzip compressor not installed"
 			export COMPRESSOR_CMD="gzip -fq -9"
 			;;
 		lzma)
-			if which lzma &>/dev/null; then
+			if command -v lzma &>/dev/null; then
 				export COMPRESSOR_CMD="lzma -fq"
-			elif which xz &>/dev/null; then
+			elif command -v xz &>/dev/null; then
 				export COMPRESSOR_CMD="xz --format=lzma -fq"
 			else
 				die "lzma log compression unsupported - neither of the lzma or xz compressors are installed"
 			fi
 			;;
 		lzop)
-			which lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
+			command -v lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
 			export COMPRESSOR_CMD="lzop -fqU -9"
 			;;
 		lz4)
-			which lz4 &>/dev/null || die "lz4 log compression unsupported - lz4 compressor not installed"
+			command -v lz4 &>/dev/null || die "lz4 log compression unsupported - lz4 compressor not installed"
 			export COMPRESSOR_CMD="lz4 -cfq -BD -9"
 			;;
 		xz)
-			which xz &>/dev/null || die "xz log compression unsupported - xz compressor not installed"
+			command -v xz &>/dev/null || die "xz log compression unsupported - xz compressor not installed"
 			export COMPRESSOR_CMD="xz -fq"
 			;;
 		cat|none|no|disabled)
@@ -328,7 +328,7 @@ function setup_logging()
 	else
 		printf "%s\\n" "${TTYCYAN_BOLD}Logging disabled${TTYRESET}"
 	fi
-	
+
 	logging_thread &
 	__LOGGING_PID=$!
 }
@@ -363,8 +363,8 @@ function check_package_dependencies()
 	local executable
 
 	for executable in "${array_executables[@]}"; do
-		which "${executable}" &>/dev/null &&	continue
-		
+		command -v "${executable}" &>/dev/null &&	continue
+
 		case "${executable}" in
 			md5sum|mkfifo)
 				package_list="${package_list} coreutils";;
@@ -374,7 +374,7 @@ function check_package_dependencies()
 	done
 	if [[ ! -z "${package_list}" ]]; then
 		printf "sudo apt-get install %s${package_list}%s\\n" "${TTYCYAN}" "${TTYRESET}" >&2
-	elif ! which netselect &>/dev/null; then
+	elif ! command -v netselect &>/dev/null; then
 		package_list="${package_list} netselect"
 		printf "Please manually install the %snetselect%s package from this Debian repository:\\n" \
 				"${TTYCYAN_BOLD}" "${TTYRESET}" >&2
@@ -407,7 +407,7 @@ function usage_information()
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYYELLOW}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 	printf "%*s%s%s%s  [%sGLOBAL-OPTION%s(s)] [%sBUILD-OPTION%s(s)] %sbuild-all%s\\n\\n" \
 		${indent} "" "${TTYPURPLE_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYGREEN}" "${TTYRESET}" "${TTYYELLOW}" "${TTYRESET}" "${TTYCYAN_BOLD}" "${TTYRESET}"
-		
+
 	printf "Utility to build dual-architecture, multilib Wine on Ubuntu(tm).\\n"
 	printf "Uses dual (32-bit and 64-bit) Chroot (schroot) Environments.\\n\\n"
 	printf "Consecutive build phases can be selected, chained, and re-run.\\n\\n"
@@ -616,7 +616,7 @@ clean_source_directories()
 
 		rm -rf "${directories_array[i]}" \
 				|| die "rm -rf \"${directories_array[i]}\" failed"
-	done	
+	done
 }
 
 # clean_build_directories()
@@ -635,7 +635,7 @@ clean_build_directories()
 			mkdir -p "${directories_array[i]}" \
 				|| die "mkdir -p \"${directories_array[i]}\" failed"
 		fi
-	done	
+	done
 }
 
 # git_clone()
@@ -686,7 +686,7 @@ function git_get_commit()
 	(((1 <= $#) && ($# <= 2))) || die "Invalid parameter count: ${#} (1-2)"
 
 	local	git_directory="${SOURCE_ROOT}/${1}" __git_commit_reference="${2}" __git_commit
-	
+
 	pushd_wrapper "${git_directory}"
 	__git_commit=$(git rev-parse HEAD)
 	[[ "${__git_commit}" =~ ${SHA1_REGEXP} ]] || die "git rev-parse HEAD failed (\"${1}\")"
@@ -842,10 +842,10 @@ function process_staging_exclude()
 				}
 			}
 			END{
-				printf("\\n")
+				printf("\n")
 			}' 2>/dev/null
 	)
-	
+
 	if [[ -z "${__staging_exclude_reference}" ]]; then
 		echo "${__processed_staging_exclude}"
 	elif [[ "${__staging_exclude_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
@@ -891,19 +891,19 @@ function apply_patch_array()
 	local		__source_directory="${SOURCE_ROOT}/${1}"
 	local -a	__array_patch_files=("${!2}")
 	local -a	__array_sorted_patch_files
-	local	_IFS_save __patch_file __patch_log
+	local	__count __patch_file __patch_log
 
-	_IFS_save="${IFS}"
-	# shellcheck disable=SC2207
-	IFS=$'\\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
-	IFS="${_IFS_save}"
+	printf "%sUsing Source Directory%s: \"%s${__source_directory}%s\" ...\\n" \
+		"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 	pushd_wrapper "${__source_directory}"
-	for __patch_file in "${__array_sorted_patch_files[@]}"; do
+	__count=0
+	# shellcheck disable=SC2068
+	for __patch_file in ${__array_sorted_patch_files[@]}; do
 		[[ -z "${__patch_file}" ]] && continue
 		[[ -f "${__patch_file}" ]] || die "patch file \"${__patch_file}\" does not exist"
 
-		printf "%sApplying patch file%s: \"%s${__patch_file}%s\" ...\\n" \
-			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
+		printf "%s(%03d) Applying patch file%s: \"%s${__patch_file}%s\" ...\\n" \
+			"${TTYCYAN}" "$((__count+=1))" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		__patch_log="$(patch --verbose -p1 < "${__patch_file}" || false)"
 		# shellcheck disable=SC2181
 		if (($?)); then
@@ -932,8 +932,8 @@ function apply_patch_directory()
 		printf "%sApplying patches from patch directory%s: \"%s${patch_directory}%s\" ...\\n" \
 				"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYBLUE}" "${TTYRESET}"
 		local array_patch_files=()
-		while IFS=  read -r -d $'\0'; do
-			array_patch_files+=("$REPLY")
+		while IFS=  read -r -d $'\0' __patch_file; do
+			array_patch_files+=("${__patch_file}")
 		done < <(find "${patch_directory}" -type f -name "*.patch" -print0)
 
 		apply_patch_array "${source_directory}" array_patch_files[@]
@@ -1170,7 +1170,7 @@ EOF
 }
 
 #		"dpkg-reconfigure locales" \
-		
+
 # upgrade_chroot_build_env()
 #	1>  : Schroot chroot name
 upgrade_chroot_build_env()
@@ -1180,7 +1180,7 @@ upgrade_chroot_build_env()
 	local -r	chroot_name="${1}"
 	local	  	session="${SESSION_WINE_INITIALISE}"
 	local -r	chroot_path="/srv/chroot/${chroot_name}"
-	
+
 	schroot_session_start "${session}" "root" "${chroot_name}"
 	schroot_session_run "${session}" "root" "/" \
 		"aptitude update	-q -y" \
@@ -1199,7 +1199,7 @@ function src_fetch()
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
 	printf "\\n\\n%s${FUNCNAME[ 0 ]} ()%s ... \\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
-	
+
 	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
 	fetch_and_extract_tarball . "${GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL}" "${GENTOO_WINE_EBUILD_COMMON_PACKAGE}"
@@ -1294,7 +1294,7 @@ function src_prepare()
 		"autoreconf"
 	if ! md5sum -c - <<<"${md5hash}" &>/dev/null; then
 		printf "\"%s${PWD}/protocol.def%s\"%s was patched; running \"%s${PWD}/tools/make_requests%s\" ... \\n" \
-			"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYCYAN_BOLD}" "${TTYRESET}" 
+			"${TTYBLUE_BOLD}" "${TTYRESET}" "${TTYCYAN}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		tools/make_requests || die "\"${PWD}/tools/make_requests\" failed"
 	fi
  	popd_wrapper
@@ -1316,7 +1316,7 @@ function multilib_src_configure()
 	schroot_session_run "${SESSION_WINE64}" "${USERNAME}" "" \
 		"'${SOURCE_ROOT}/wine/configure' ${WINE_CONFIGURATION} --enable-win64 --prefix='${PREFIX}'"
 	popd_wrapper
-	
+
 	# Configure 32-bit wine32_tools
 	pushd_wrapper "${BUILD_ROOT}/wine32_tools"
 	[[ -f "Makefile" ]] && schroot_session_run "${SESSION_WINE32}" "${USERNAME}" "" \
@@ -1344,7 +1344,7 @@ function multilib_src_compile()
 	schroot_session_run "${SESSION_WINE32}" "${USERNAME}" "" \
 		"make ${WINE_MAKE_OPTIONS}"
 	popd_wrapper
-	
+
 	# Configure & Build multilib wine32(64)
 	pushd_wrapper "${BUILD_ROOT}/wine32"
 	[[ -f "Makefile" ]] && schroot_session_run "${SESSION_WINE32}" "${USERNAME}" "" \
@@ -1451,11 +1451,11 @@ function screen_conf_file()
 	return
 }
 
-		
+
 # process_command()
 #  	1...N>	:  Array of commands and options (passed as CLI parameters)
 function process_command()
-{	
+{
 	# Process options
 	local option="${1}"
 	local build_options directory directory_type parent_directory
@@ -1530,7 +1530,7 @@ function process_command()
 				[[ "${option%=*}" =~ branch$ ]] && WINE_STAGING_BRANCH="${option#*=}"
 				[[ "${option%=*}" =~ commit$ ]] && WINE_STAGING_COMMIT="${option#*=}"
 				;;
-				
+
 			--wine-staging-branch|--wine-staging-commit)
 				build_options="${build_options} ${option}"
 				shift
@@ -1544,7 +1544,7 @@ function process_command()
 				[[ "${option%=*}" =~ branch$ ]] && WINE_BRANCH="${option#*=}"
 				[[ "${option%=*}" =~ commit$ ]] && WINE_COMMIT="${option#*=}"
 				;;
-				
+
 			--wine-branch|--wine-commit)
 				build_options="${build_options} ${option}"
 				shift
@@ -1552,7 +1552,7 @@ function process_command()
 				[[ "${option}" =~ branch$ ]] && WINE_BRANCH="${1}"
 				[[ "${option}" =~ commit$ ]] && WINE_COMMIT="${1}"
 				;;
-				
+
 			--wine-staging=*|--staging=*)
 				build_options="${build_options} ${option%=*}"
 				parse_boolean_option "${option#*=}" "WINE_STAGING"
@@ -1621,7 +1621,7 @@ function process_command()
 			fi
 			export	COMMAND="setup"
 			;;
-		
+
 		upgrade-chroot|upgrade|update-chroot|update)
 			if [[ ! -z "${COMMAND}" ]]; then
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" 1
@@ -1757,16 +1757,16 @@ function execute_commands()
 # Number of processor threads to use.
 # THREADS="${THREADS}" # default
 #
-# Wine-Staging subpatchsets to optionally disable.        [src-prepare]
+# Wine-Staging subpatchsets to optionally disable.		[src-prepare]
 # WINE_STAGING_EXCLUDE="" # default
 #
-# Configuration options for wine.                         [src-configure]
+# Configuration options for wine.						 [src-configure]
 # WINE_CONFIGURATION="${WINE_CONFIGURATION}" # default
 #
-# CFLAGS (compile flags) to pass to wine.                 [src-configure]
+# CFLAGS (compile flags) to pass to wine.				 [src-configure]
 # WINE_CFLAGS="${WINE_CFLAGS}" # default
 #
-# Make options to use when compiling wine.                [src-compile]
+# Make options to use when compiling wine.				[src-compile]
 # WINE_MAKE_OPTIONS="${WINE_MAKE_OPTIONS}" # default
 #
 #
@@ -1840,7 +1840,7 @@ EOF_script_config
 	version)
 		printf "\\n%s${SCRIPT_NAME} version%s: %s${SCRIPT_VERSION}%s ...\\n" \
 				"${TTYCYAN}" "${TTYRESET}" "${TTYWHITE_BOLD}" "${TTYRESET}"
-		;;			
+		;;
 	build)
 		setup_logging "${COMMAND}"
 		{
@@ -1883,10 +1883,10 @@ function main()
 	SCRIPT_DIRECTORY="$(dirname "${SCRIPT_PATH}")"
 	SCRIPT_NAME="$(basename "${SCRIPT_PATH}")"
 	if pushd "${SCRIPT_PATH}" &>/dev/null; then
-        SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
-        # shellcheck disable=SC2164
-        popd &>/dev/null
-    fi
+		SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
+		# shellcheck disable=SC2164
+		popd &>/dev/null
+	fi
 	export		SCRIPT_CONFIG="/etc/${SCRIPT_NAME%.sh}.conf"
 
 	declare -a	USER_PATCH_DIRECTORIES
@@ -1933,7 +1933,7 @@ function main()
 	parse_boolean_option "${WINE_STAGING}" "WINE_STAGING"
 	export		__WINE_COMMIT	__WINE_STAGING_COMMIT
 	export		__WINE_VERSION	__WINE_STAGING_VERSION
-	
+
 	# Global script constants
 	export	WINE_STAGING_PATCHBIN_SCRIPT="patchbin.sh"
 	export  SOUND_COMPLETION="/usr/share/sounds/freedesktop/stereo/complete.oga"
@@ -1977,22 +1977,24 @@ function main()
 	export		WINE_CONFIGURATION="${WINE_CONFIGURATION:---without-hal --without-v4l --without-oss}"
 	export		WINE_CFLAGS="${WINE_CFLAGS:--march=native -mtune=native}"
 	export		WINE_MAKE_OPTIONS="${WINE_MAKE_OPTIONS:--j${THREADS}}"
-	
+
 	# Global schroot constants
 	export		LSB_CODENAME
 	if [[ -z "${LSB_CODENAME}" ]]; then
-        LSB_CODENAME="$(lsb_release -sc)"
-        LSB_CODENAME="${LSB_CODENAME,,}"
-    fi
+		LSB_CODENAME="$(lsb_release -sc)"
+		LSB_CODENAME="${LSB_CODENAME,,}"
+	fi
 	# Reverse-mangle the stupid Linux Mint Release Code Name overrides
 	case "${LSB_CODENAME}" in
-        sylvia|sonya|serena|sarah)
-            LSB_CODENAME="xenial";;
-        rosa|rafaela|rebecca|qiana)
-            LSB_CODENAME="trusty";;
-        betsy)
-            LSB_CODENAME="jessie";;
-    esac
+		tara)
+			LSB_CODENAME="bionic";;
+		sylvia|sonya|serena|sarah)
+			LSB_CODENAME="xenial";;
+		rosa|rafaela|rebecca|qiana)
+			LSB_CODENAME="trusty";;
+		betsy)
+			LSB_CODENAME="jessie";;
+	esac
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
 	export		SESSION_WINE_INITIALISE="session:wine_initialise"
@@ -2021,13 +2023,13 @@ function main()
 	schroot -e -c "${SESSION_WINE_INITIALISE}" &>/dev/null
 	schroot -e -c "${SESSION_WINE32}" &>/dev/null
 	schroot -e -c "${SESSION_WINE64}" &>/dev/null
-	
+
 	# Process script parameters: options and commands
 	if [[ ! -z "${LOG_COMPRESSION}" ]]; then
 		set_log_compression "${LOG_COMPRESSION}"
-	elif which gzip &>/dev/null; then
+	elif command -v gzip &>/dev/null; then
 		set_log_compression "gzip"
-	else	
+	else
 		set_log_compression "none"
 	fi
 	process_command	"${@}"
