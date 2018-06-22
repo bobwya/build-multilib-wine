@@ -309,6 +309,8 @@ function setup_logging()
 		# Make Log directory
 		LOG=$(date --iso-8601=seconds)
 		case "${command}" in
+			runtime)
+				export LOG="${LOG_DIRECTORY}/install-runtime_${LOG}.log";;
 			setup)
 				export LOG="${LOG_DIRECTORY}/chroot-setup_${LOG}.log";;
 			upgrade)
@@ -420,6 +422,11 @@ function usage_information()
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "${TTYRED_BOLD}" "This command runs as root." "${TTYRESET}"
 	printf "\\n"
 	printf "%*s%s%*s%s%*s%s\\n" \
+		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "host-runtime" "${TTYRESET}" ${indent} "" "Install Wine runtime packages for host system (alternative to installing winehq-staging / winehq-vanilla packages)."
+	printf "%*s%s%*s%s%*s%s%s%s\\n" \
+		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "${TTYRED_BOLD}" "This command runs as root." "${TTYRESET}"
+	printf "\\n"
+	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "setup-chroot" "${TTYRESET}" ${indent} "" "Setup 32-bit and 64-bit Chroot Environments."
 	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYCYAN_BOLD}" ${col_width} "" "${TTYRESET}" ${indent} "" "Install Ubuntu base development libraries for Wine"
@@ -491,6 +498,13 @@ function usage_information()
 	printf "%*s%s%*s%s%*s%s\\n" \
 		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--log-directory" "${TTYRESET}" ${indent} "" "Specify directory in which log files will be created during build."
 	printf "\\n"
+	printf "%sRUNTIME-OPTION%s :\\n" "${TTYYELLOW}" "${TTYRESET}"
+	printf "\\n"
+		printf "%*s%s%*s%s%*s%s\\n" \
+		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--base" "${TTYRESET}" ${indent} "" "Specify to only install base Wine runtime packages on host system (not recommended)."
+	printf "%*s%s%*s%s%*s%s\\n" \
+		$((indent)) "" "${TTYGREEN}" ${gopt_col_width} "--full" "${TTYRESET}" ${indent} "" "Specify to install full Wine runtime on host system [default]."
+	printf "\\n"
 	printf "%sBUILD-OPTION%s :\\n" "${TTYYELLOW}" "${TTYRESET}"
 	printf "\\n"
 	printf "%*s%s%*s%s%*s%s\\n" \
@@ -543,7 +557,10 @@ function display_completion_message()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	if [[ "${COMMAND}" != "build" ]]; then
+	if [[ "${COMMAND}" == "runtime" ]]; then
+		printf "\\n%s%s%s: %sInstall host-${COMMAND} has completed successfully%s ...\\n" \
+			"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}"
+	elif [[ "${COMMAND}" != "build" ]]; then
 		printf "\\n%s%s%s: %sChroot-${COMMAND} has completed successfully%s ...\\n" \
 			"${TTYGREEN_BOLD}" "${SCRIPT_NAME}" "${TTYRESET}" "${TTYWHITE}" "${TTYRESET}"
 	else
@@ -962,11 +979,11 @@ function apply_user_patches()
 
 #### Network Helper Functions Definition Block ####
 
-# get_ubuntu_mirror()
+# get_fastest_package_mirror()
 # ( 1>	: Minimum number of connection tries )
 # ( 2>	: Maximum TTL )
 # ( 3<	: Fastest local Ubuntu Mirror )
-get_ubuntu_mirror()
+get_fastest_package_mirror()
 {
 	(($# <= 3)) || die "Invalid parameter count: ${#} (0-3)"
 
@@ -1006,6 +1023,74 @@ get_ubuntu_mirror()
 	fi
 }
 
+manual_install_package_set()
+{
+	(($# >= 2)) || die "Invalid parameter count: ${#} (2-)"
+
+	local set_type="${1}"
+
+	printf "%s\\nInstalling Wine runtime %s%s%s set ...\\n" \
+		"${TTYWHITE_BOLD}" "${TTYBLUE_BOLD}" "${set_type}" "${TTYRESET}"
+	for package in ${@:2}; do
+		printf "%s\\nProcessing package: %s%s%s ...\\n" \
+				"${TTYWHITE_BOLD}" "${TTYBLUE_BOLD}" "${package}" "${TTYRESET}"
+		aptitude install -q -y "${package}" \
+			|| die "aptitude failed to install Wine ${set_type} package: ${package}"
+		apt-mark manual "${package}" \
+			|| die "apt-mark manual failed for Wine ${set_type} package: ${package}"
+	done
+}
+
+install_host_wine_runtime()
+{
+	(($# == 2)) || die "Invalid parameter count: ${#} (2)"
+
+	local architecture="${1}" option="${2,,}"
+	local libpng
+	local -a array_package_list_base array_package_list_optional array_package_list_recommends
+
+	libpng="$(aptitude search -F "%p" "libpng1[0-9]" | head -n 1)"
+	array_package_list_base=( "libasound2" "libc6" "libglib2.0-0" "libgphoto2-6" "libgphoto2-port12" "libgstreamer-plugins-base1.0-0" "libgstreamer1.0-0"
+		"liblcms2-2" "libldap-2.4-2" "libmpg123-0" "libopenal1" "libpulse0" "libudev1" "libx11-6" "libxext6" "libxml2" "zlib1g" "libasound2-plugins" "libncurses5"
+	)
+	array_package_list_recommends=( "libcairo2" "libcapi20-3" "libcups2" "libdbus-1-3" "libfontconfig1" "libfreetype6" "libglu1-mesa" "libglu1" "libgnutls30" "libgsm1"
+		"libgssapi-krb5-2" "libgstreamer-plugins-bad1.0-0" "libgstreamer-plugins-good1.0-0" "libgtk-3-0" "libjpeg8" "libkrb5-3" "libncurses5" "libodbc1" "libosmesa6"
+		"libpcap0.8" "${libpng}" "libsane" "libsdl2-2.0-0" "libtiff5" "libtxc-dxtn-s2tc0" "libv4l-0" "libva-drm1" "libva-x11-1" "libva1" "libvulkan1" "libxcomposite1"
+		"libxcursor1" "libxfixes3" "libxi6" "libxinerama1" "libxrandr2" "libxrender1" "libxslt1.1" "libxxf86vm1"
+	)
+	array_package_list_optional=( "winbind" )
+
+	case "${architecture}" in
+		i386)
+			dpkg --add-architecture i386 \
+				|| die "dpkg failed to add i386 architecture"
+			;;
+		amd64)
+			;;
+		*)
+			die "unknown package architecture specified: \"${architecture}\""
+			;;
+	esac
+	apt-get install aptitude \
+		|| die "apt failed to install aptitude package"
+	aptitude update -q -y
+	# shellcheck disable=SC2068
+	manual_install_package_set "${architecture} base library" ${array_package_list_base[@]/%/:${architecture}}
+	case "${option}" in
+		--full)
+			# shellcheck disable=SC2068
+			manual_install_package_set "${architecture} recommended library" ${array_package_list_base[@]/%/:${architecture}}
+			if [[ "${architecture}" = "amd64" ]]; then
+				manual_install_package_set "${architecture} optional package" ${array_package_list_optional[@]}
+			fi
+			;;
+		--base)
+			;;
+		*)
+			die "Unknown option: \"${option}\", specify: \"--base\" or \"--full\""
+			;;
+	esac
+}
 
 #### Schroot / Chroot Function Definition Block ####
 
@@ -1160,7 +1245,7 @@ EOF
 	schroot_session_run "${session}" "root" "/" \
 		"apt-get install -q -y aptitude apt-utils locales" \
 		"locale-gen ${locale_lang}" \
-		"apt-get update	-q -y" \
+		"apt-get update -q -y" \
 		"apt-get upgrade -q -y" \
 		"rm -f \"${chroot_path}/etc/systemd/resolved.conf\"" \
 		"aptitude install -q -y ubuntu-minimal software-properties-common" \
@@ -1183,11 +1268,11 @@ upgrade_chroot_build_env()
 
 	schroot_session_start "${session}" "root" "${chroot_name}"
 	schroot_session_run "${session}" "root" "/" \
-		"aptitude update	-q -y" \
-		"aptitude upgrade   -q -y" \
+		"aptitude update -q -y" \
+		"aptitude upgrade -q -y" \
 		"aptitude install -q -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev libsdl2-dev libvulkan-dev" \
 		"apt-get build-dep -q -y -f wine-development" \
-		"aptitude upgrade   -q -y"
+		"aptitude upgrade -q -y"
 	schroot_session_cleanup "${session}"
 }
 
@@ -1458,9 +1543,14 @@ function process_command()
 {
 	# Process options
 	local option="${1}"
-	local build_options directory directory_type parent_directory
+	local build_options directory directory_type parent_directory host_runtime_option
 	while (($#)); do
 		case "${option}" in
+			--full|--base)
+				host_runtime_option="${option}"
+				shift
+				;;
+
 			--build-directory|--build-dir|--log-directory|--log-dir|--patch-directory|--patch-dir|--source-directory|--source-dir|--prefix|--prefix-directory|--prefix-dir)
 				directory_type=$(echo "${option}" | sed -r 's:(^\-\-|\-directory$|\-dir$)::g')
 				[[ "${directory_type}" != "log" ]] && build_options="${build_options} ${option}"
@@ -1609,8 +1699,19 @@ function process_command()
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
 			elif [[ ! -z "${build_options}" ]]; then
 				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
+			elif [[ ! -z "${host_runtime_option}" ]]; then
+				die "host-runtime-option(s): \"${host_runtime_option}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="conf"
+			;;
+
+		host-runtime|runtime)
+			if [[ ! -z "${COMMAND}" ]]; then
+				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
+			elif [[ ! -z "${build_options}" ]]; then
+				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
+			fi
+			export	COMMAND="runtime"
 			;;
 
 		setup-chroot|setup)
@@ -1618,6 +1719,8 @@ function process_command()
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
 			elif [[ ! -z "${build_options}" ]]; then
 				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
+			elif [[ ! -z "${host_runtime_option}" ]]; then
+				die "host-runtime-option(s): \"${host_runtime_option}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="setup"
 			;;
@@ -1627,6 +1730,8 @@ function process_command()
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" 1
 			elif [[ ! -z "${build_options}" ]]; then
 				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
+			elif [[ ! -z "${host_runtime_option}" ]]; then
+				die "host-runtime-option(s): \"${host_runtime_option}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="upgrade"
 			;;
@@ -1636,6 +1741,8 @@ function process_command()
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\""  "" 1
 			elif [[ ! -z "${build_options}" ]]; then
 				die "build-option(s): \"${build_options}\" ; are incompatible with command: \"${new_command}\"" "" 1
+			elif [[ ! -z "${host_runtime_option}" ]]; then
+				die "host-runtime-option(s): \"${host_runtime_option}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="version"
 			;;
@@ -1645,6 +1752,8 @@ function process_command()
 			((WINE_STAGING))	|| set_wine_git_tag
 			if [[ "${COMMAND}" =~ setup|upgrade ]]; then
 				die "incompatible command(s) specified : \"${prev_command}\" \"${new_command}\"" "" 1
+			elif [[ ! -z "${host_runtime_option}" ]]; then
+				die "host-runtime-option(s): \"${host_runtime_option}\" ; are incompatible with command: \"${new_command}\"" "" 1
 			fi
 			export	COMMAND="build"
 			case "${new_command}" in
@@ -1776,6 +1885,24 @@ EOF_script_config
 				) > "${SCRIPT_CONFIG}"
 		' root || die "Failed to generate default configuration file: \"${SCRIPT_CONFIG}\""
 		;;
+	runtime)
+		setup_logging "${COMMAND}"
+		{
+			export -f cleanup die install_host_wine_runtime manual_install_package_set
+			export host_runtime_option="${host_runtime_option:---full}"
+
+			# shellcheck disable=SC1004,SC2016
+			su -p -c '
+				printf "\\n%sAttempting to install host runtime for Wine%s ...\\n" "${TTYWHITE_BOLD}" "${TTYRESET}"
+				if [[ ! "${host_runtime_option}" = "--base" ]]; then
+					printf "\\n%sPlease ensure you have the: %suniverse%s, %smultiverse%s and %srestricted%s repositories enabled, for your package manager%s ...\\n" \
+						"${TTYWHITE_BOLD}" "${TTYBLUE_BOLD}" "${TTYWHITE_BOLD}" "${TTYBLUE_BOLD}" "${TTYWHITE_BOLD}" "${TTYBLUE_BOLD}" "${TTYWHITE_BOLD}" "${TTYRESET}"
+				fi
+				install_host_wine_runtime "i386" "${host_runtime_option}"
+				install_host_wine_runtime "amd64" "${host_runtime_option}"
+			' root || die "Failed to install ${host_runtime_option#--} Wine runtime environment"
+		} &>"${__FIFO_LOG_PIPE}"
+		;;
 	setup)
 		if [[ ! -z "${OPTIONS}" ]]; then
 			die "invalid option(s) specified: ${OPTIONS}" "" 1
@@ -1783,14 +1910,14 @@ EOF_script_config
 		setup_logging "${COMMAND}"
 		{
 			export -f schroot_session_start schroot_session_run schroot_session_cleanup \
-						cleanup die get_ubuntu_mirror bootstrap_schroot_image \
+						cleanup die get_fastest_package_mirror bootstrap_schroot_image \
 						setup_chroot_build_env upgrade_chroot_build_env
 
 			# shellcheck disable=SC2016
 			su -p -c '
 				printf "\\n%s\\n" "${TTYWHITE_BOLD}Detecting Ubuntu Mirror (with the lowest ping)${TTYRESET} ..."
 				export		UBUNTU_MIRROR_URI
-				UBUNTU_MIRROR_URI="$(get_ubuntu_mirror)"
+				UBUNTU_MIRROR_URI="$(get_fastest_package_mirror)"
 				printf "\\n${TTYWHITE_BOLD}Creating 32-bit Chroot Environment${TTYRESET} ...\\n"
 				bootstrap_schroot_image "'"${LSB_CODENAME}_wine_32bit"'" "i386"
 				printf "\\n${TTYWHITE_BOLD}Creating 64-bit Chroot Environment${TTYRESET} ...\\n"
@@ -1952,7 +2079,7 @@ function main()
 	export	WINE_STAGING_GIT_URL="https://github.com/wine-staging/wine-staging.git"
 	export	WINE_GIT_URL="git://source.winehq.org/git/wine.git"
 	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL="https://github.com/bobwya/${GENTOO_WINE_EBUILD_COMMON_PACKAGE}/archive/${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}.tar.gz"
-	export	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-compholio/wine-staging/master/patches/gitapply.sh"
+	export	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-staging/wine-staging/master/patches/gitapply.sh"
 
 	export	WINE_EBUILD_COMMON="${GENTOO_WINE_EBUILD_COMMON_PACKAGE}-${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}"
 
