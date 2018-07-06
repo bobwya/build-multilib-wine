@@ -1,4 +1,4 @@
-## Ubuntu Wine/Wine Staging Build Script (build-multilib-wine)
+## Debian/Ubuntu Wine/Wine Staging Build Script (build-multilib-wine)
 
 ###  Downloading
 
@@ -7,7 +7,7 @@ If you chose to download the build-multilib-wine script directly from Github (ra
 ###  Usage
 
 
-Install the script in your user's PATH. Ensure that you have setup a **root** user password set - as the script uses **su** to escalate prviliges, as and when required. By default **Ubuntu** only sets up **sudo** privileges.
+Install the script in your user's PATH. Ensure that you have setup a **root** user password set - as the script uses **su** to escalate privileges, as and when required. **Note**: by default **Ubuntu** only sets up **sudo** privileges.
 
 The script has a detailed help page with the all the supported options:
 ```
@@ -59,32 +59,32 @@ User patches can applied - any number of directories, containing patch files, ca
 Schroot setup and the build process can be optionally logged using a separate thread (via FIFO pipe). Optionally on completion of the selected build phases, or Schroot operations - the log file can be automatically compressed (all the main Linux compressors are supported). Log files and stdout console output can be colourised according to user preference.
 
 At present the build script carefully installs **all** necessary development libraries to build Wine or Wine Staging from Source. But these libraries are only installed in the Chroot Environments.
-There is no attempt to install necessary runtime dependencies (mainly 32-bit libraries) on the Host Ubuntu(tm) System. This will be added in at a later stage (perhaps a small helper script). This isn't a package builder! So it's recommended to install one the WineHQ official packages (**winehq-devel** or **winehq-staging**) alongside your usage of this script... These packages will pull in the necessary runtime library dependencies, plus install package icons and desktop files.
+There is no attempt to install necessary runtime dependencies (mainly 32-bit libraries) on the Host Debian or Ubuntu(tm) System. This will be added in at a later stage (perhaps a small helper script). This isn't a package builder! So it's recommended to install one the WineHQ official packages (**winehq-devel** or **winehq-staging**) alongside your usage of this script... These packages will pull in the necessary runtime library dependencies, plus install package icons and desktop files.
 
 
 ###  Discussion
 
 
-This Github repository houses a monolithic BASH script to build multilib Wine / Wine Staging, from source, on Ubuntu(tm) (or Debian) - using dual Chroot Environments. Ubuntu 16.04 Xenial (or newer) is a hard requirement for the Chroot Environments.
+This Github repository houses a monolithic BASH script to build multilib Wine / Wine Staging, from source, on Debian or Ubuntu(tm). Utilising dual Chroot Environments. Ubuntu 16.04 Xenial (or newer) is a hard requirement for the Chroot Environments.
 
-All recent Ubuntu(tm) / Debian distribution releases have many critical i386 multilib development libraries removed from their 64-bit repositories (post the Ubuntu 10.04 release?) However Wine requires a complete multilib build/development environment to be built from Source. The vast majority of Windows binaries are still 32-bit (including all legacy applications).
+All recent Debian or Ubuntu(tm) distribution releases have packaging errors with some of the 32-bit and 64-bit multilib development libraries required for Wine. Wine requires a complete multilib build/development environment to be built from Source. The vast majority of Windows binaries are still 32-bit (including all legacy applications).
 
-It appears, from the WineHQ forums, that Ubuntu/Wine users meet a bit a brick wall if they want to apply non-official patches to Wine. Building multilib Wine from source - without the necessary 32-bit development libraries - is quite tricky!
+It appears, from the WineHQ forums, that Ubuntu Wine users (and pseudo distributions like "Linux Mint") meet a bit a brick wall if they want to apply non-official patches to Wine. Building multilib Wine from source - without the necessary 32-bit development libraries - is quite tricky!
 
-To overcome the problem of building Wine from Source on a modern Ubuntu(tm) release requires access to a true 32-bit Ubuntu system and repositories on a 64-bit System. This is because multilib Wine is effectively built/compiled in 2 cycles on a 64-bit System: 32-bit and 64-bit respectively.
+To overcome the problem of building Wine from Source on a modern Debian or Ubuntu(tm) release, requires access to a true 32-bit Ubuntu system and repositories on a 64-bit System. This is because multilib Wine is effectively built/compiled in 2 cycles on a 64-bit System: 32-bit and 64-bit respectively.
 
-As Ubuntu(tm) has removed the necessary 32-bit development libraries, from the 64-bit repositories, it is necessary to use a more "creative build process" to workaround this. The main available and solutions that can be used are:
+Modern Debian and Ubuntu(tm) releases have issues co-installing many Wine development 32-bit and 64-bit libraries (due to Debian multilib packaging errors). It is necessary to use a more "creative build process" to workaround this. The main available and solutions that can be used are:
 
-1. **build multilib Wine natively on a 64-bit Ubuntu(tm) system**
+1. **build multilib Wine natively on a 64-bit Debian / Ubuntu(tm) system**
   * This works - but 32-bit support will not be fully functional in the Wine build - due to a number of critical development libraries that will be missing.
 
-2. **build multilib Wine on a 64-bit Ubuntu(tm) using a 32-bit Chroot**
+2. **build multilib Wine on a 64-bit Debian / Ubuntu(tm) using a 32-bit Chroot**
   * Performant, doesn't pollute the host system with unnecessary development libraries, no missing 32-bit development libraries, Chroot images can be minimal in size and thereby use the least possible disk space.
 
-3. **build multilib Wine on 64-bit Ubuntu(tm) using a 32-bit LXC (Linux Container)**
+3. **build multilib Wine on 64-bit Debian / Ubuntu(tm) using a 32-bit LXC (Linux Container)**
   * Performant, doesn't need to pollute the host system with unnecessary development libraries (if using dual architecture containers), no missing 32-bit development libraries. LXC image can be relatively small, but can be difficult to setup (steep learning curve).
 
-4. **build multilib Wine on 64-bit Ubuntu(tm) using a Virtual Machine with a 32-bit Ubuntu(tm) image (VM - e.g. VirtualBox)**
+4. **build multilib Wine on 64-bit Debian / Ubuntu(tm) using a Virtual Machine with a 32-bit Debian / Ubuntu(tm) image (VM - e.g. VirtualBox)**
   * Overhead (CPU), hard to link the 32-bit Wine build to the native 64-bit Wine build, disk usage hog, not a very practical solution!
 
 Also see: https://wiki.winehq.org/Building_Wine
