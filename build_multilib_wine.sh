@@ -1390,18 +1390,28 @@ function screen_conf_file()
 
 	# shellcheck disable=SC1004
 	awk 'BEGIN{
-			regex_whitespace="(^[[:blank:]]*|[[:blank:]]*$)"
+			regex_pre_whitespace="^[[:blank:]][[:blank:]]*"
+			regex_post_whitespace="[[:blank:]][[:blank:]]*$"
+			regex_blank_line="^[[:blank:]]*$"
 			regex_blank_comment_line="^[[:blank:]]*(\#|$)"
-			regex_boolean_variables="^(COLOUR|LOGGING|WINE_STAGING)[[:blank:]]*(#|$)"
+			regex_comment="(\"[^\"]*\"|[^\"]*)[[:blank:]]*\#"
+			regex_boolean_variables="^(COLOUR|LOGGING|WINE_STAGING)$"
 			regex_string_variables="^((BUILD|SOURCE)_ROOT|LOG_(COMPRESSION|DIRECTORY)|PREFIX|THREADS|"\
-"WINE_(CFLAGS|CONFIGURATION|MAKE_OPTIONS|VERSION|BRANCH|COMMIT)|WINE_STAGING_(BRANCH|COMMIT|EXCLUDE))[[:blank:]]*(#|$)"
-			regex_array_string_variables="^(USER_PATCH_DIRECTORIES)[[:blank:]]*(#|$)"
-			regex_string_value="^\"[^\"]*\"[[:blank:]]*(#|$)"
-			regex_boolean_value="^(0|1|false|true|no|yes)[[:blank:]]*(#|$)"
-			regex_array_string_value="^\\([[:blank:]]*(\"[^\"]*\"[[:blank:]]*)+\\)[[:blank:]]*(#|$)"
-			regex_shell_command="\$\\([^\)]+\\)"
+"WINE_(CFLAGS|CONFIGURATION|MAKE_OPTIONS|VERSION|BRANCH|COMMIT)|WINE_STAGING_(BRANCH|COMMIT|EXCLUDE))$"
+			regex_array_string_variables="^(USER_PATCH_DIRECTORIES)$"
+			regex_string_value="^\"[^\"]*\"$"
+			regex_boolean_value="^(0|1|false|true|no|yes)"
+			regex_array_string_value="^[(][[:blank:]]*(\"[^\"]*\"[[:blank:]]*)(\"[^\"]*\"[[:blank:]]*)*[)]$"
+			regex_shell_command="\\$([\\(][\\(][^\)]*[\\)][\\)]|[\\(][^\)]*[\\)])"
+			regex_operator="[+][=]|[-][=]|[=]"
 			command_tput="tput setaf 1 ; tput bold"
 			command_tput | getline ttyred_bold
+			close(command_tput)
+			command_tput="tput setab 1 ; tput bold"
+			command_tput | getline ttyred_bold_background
+			close(command_tput)
+			command_tput="tput setaf 4"
+			command_tput | getline ttyblue
 			close(command_tput)
 			command_tput="tput setaf 6 ; tput bold"
 			command_tput | getline ttycyan_bold
@@ -1414,39 +1424,125 @@ function screen_conf_file()
 			if ($0 ~ regex_blank_comment_line)
 				next
 
-			match($0, "^[^\=]+\=")
-			error1=error2=0
-			variable=substr($0,1,RSTART+RLENGTH-2)
-			gsub(regex_whitespace, "", variable)
-			value=substr($0,RSTART+RLENGTH)
-			gsub(regex_whitespace, "", value)
-			if (!RSTART)
-				error1=1
-			else if (variable ~ regex_shell_command)
-				error1=1
-			else if (value ~ regex_shell_command)
-				error2=1
-			else if (variable ~ regex_boolean_variables)
-				error2=(value !~ regex_boolean_value)
-			else if (variable ~ regex_string_variables) {
-				error2=(value !~ regex_string_value)
+			error=0
+			pre_whitespace=post_whitespace=variable=operator=value=""
+			i=0
+			while (++i<=NF) {
+				if ($i ~ regex_blank_line)
+					continue
+
+				variable=$i
+				break
 			}
-			else if (variable ~ regex_array_string_variables) {
-				error2=(value !~ regex_array_string_value)
-				sub("\\$$", "([[:blank:]])*\\+?&", regex_array_string_variables)
+			match(variable, regex_operator)
+			if (RSTART) {
+				operator=substr(variable, RSTART,RLENGTH)
+				value=substr(variable, RSTART+RLENGTH)
+				variable=substr(variable, 1, RSTART-1)
 			}
-			else
-				error1=1
-			invalid=invalid || error1 || error2
-			if (error1 || error2) {
-				printf("%s(%04d)%s %s%s%s=%s%s%s\\n", ttycyan_bold, NR, ttyreset,
-										(error1 ? ttyred_bold : ""), variable, (error1 ? ttyreset : ""),
-										(error2 ? ttyred_bold : ""), value, (error2 ? ttyreset : ""))
+			while (++i<=NF)
+				value=(value " " $i)
+			if (operator == "") {
+				match(value, regex_operator)
+				if (RSTART) {
+					operator=substr(value, 1, RSTART+RLENGTH-1)
+					value=substr(value, RSTART+RLENGTH)
+				}
 			}
+			comment=""
+			if (operator == "") {
+				match(variable, "\#")
+				if (RSTART) {
+					comment=(" " substr(variable, RSTART+RLENGTH-1))
+					variable=substr(variable, 1, RSTART+RLENGTH-1)
+				}
+			}
+			else {
+				match(value, regex_comment)
+				if (RSTART) {
+					comment=(" " substr(value, RSTART+RLENGTH-1))
+					value=substr(value, 1, RSTART+RLENGTH-2)
+				}
+			}
+			sub(regex_pre_whitespace, "", variable)
+			sub(regex_post_whitespace, "", value)
+			match(variable, regex_post_whitespace)
+			if (RSTART) {
+				pre_whitespace=substr(variable, RSTART, RLENGTH)
+				variable=substr(variable, 1, RSTART-1)
+			}
+			match(operator, regex_pre_whitespace)
+			if (RSTART) {
+				pre_whitespace=(pre_whitespace substr(operator, 1, RLENGTH))
+				operator=substr(operator, RSTART+RLENGTH)
+			}
+			match(operator, regex_post_whitespace)
+			if (RSTART) {
+				post_whitespace=substr(operator, RSTART)
+				operator=substr(operator, 1, RSTART-1)
+			}
+			match(value, regex_pre_whitespace)
+			if (RSTART) {
+				post_whitespace=(post_whitespace substr(value, 1, RLENGTH))
+				value=substr(value, RSTART+RLENGTH)
+			}
+			value_valid=value_missing=operator_valid=operator_missing=variable_valid=0
+			boolean_variable_valid=(variable ~ regex_boolean_variables)
+			string_variable_valid=(variable ~ regex_string_variables)
+			array_variable_valid=(variable ~ regex_array_string_variables)
+			variable_valid=boolean_variable_valid || string_variable_valid || array_variable_valid
+
+			if (operator == "") {
+				if (boolean_variable_valid || string_variable_valid)
+					operator="="
+				else if (array_variable_valid)
+					operator="[+]="
+				operator_missing=1
+			}
+			else if (boolean_variable_valid || string_variable_valid)
+				operator_valid=(operator == "=")
+			else if (array_variable_valid)
+				operator_valid=(operator == "+=") || (operator == "=")
+
+			if (operator_valid && variable_valid) {
+				value_valid=(boolean_variable_valid && (value ~ regex_boolean_value)) ||
+							(string_variable_valid && (value ~ regex_string_value)) ||
+						    (array_variable_valid && (value ~ regex_array_string_value))
+			}
+			if (variable_valid && (value == "")) {
+				value="??"
+				value_missing=1
+			}
+
+			if ((variable == "") && (operator == "") && (value == ""))
+				value_valid=operator_valid=variable_valid=1
+
+			if (!variable_valid)
+				variable=(ttyred_bold variable ttyreset)
+			if (!operator_valid)
+				operator=((operator_missing ? ttyblue : ttyred_bold) operator ttyreset)
+			if (!value_valid)
+				value=((value_missing ? ttyblue : ttyred_bold) value ttyreset)
+			else if (gsub(regex_shell_command, (ttyred_bold "&" ttyreset), value))
+				value_valid=0
+
+			error=!(variable_valid && operator_valid && value_valid)
+			error=error || pre_whitespace || post_whitespace
+			if (pre_whitespace)
+				pre_whitespace=(ttyred_bold_background pre_whitespace ttyreset)
+			if (post_whitespace)
+				post_whitespace=(ttyred_bold_background post_whitespace ttyreset)
+
+			if (error) {
+				printf("%s(%04d)%s %s%s%s%s%s%s\n",
+					    ttycyan_bold, NR, ttyreset,
+						variable, pre_whitespace, operator, post_whitespace, value, comment)
+			}
+			invalid=invalid || error
 		}
 		END{
 			exit invalid
-		}' "${__script_conf_file}" 2>/dev/null
+		}' "${__script_conf_file}" 2>"/dev/null"
 
 	return
 }
@@ -1882,7 +1978,7 @@ function main()
 	SCRIPT_PATH="$(readlink -f "${0}")"
 	SCRIPT_DIRECTORY="$(dirname "${SCRIPT_PATH}")"
 	SCRIPT_NAME="$(basename "${SCRIPT_PATH}")"
-	if pushd "${SCRIPT_PATH}" &>/dev/null; then
+	if pushd "${SCRIPT_DIRECTORY}" &>/dev/null; then
 		SCRIPT_VERSION="git-$(git log -1 --date=short --format=%cd "${SCRIPT_NAME}")"
 		# shellcheck disable=SC2164
 		popd &>/dev/null
@@ -1952,7 +2048,7 @@ function main()
 	export	WINE_STAGING_GIT_URL="https://github.com/wine-staging/wine-staging.git"
 	export	WINE_GIT_URL="git://source.winehq.org/git/wine.git"
 	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_URL="https://github.com/bobwya/${GENTOO_WINE_EBUILD_COMMON_PACKAGE}/archive/${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}.tar.gz"
-	export	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-compholio/wine-staging/master/patches/gitapply.sh"
+	export	WINE_STAGING_BINPATCH_URL="https://raw.githubusercontent.com/wine-staging/wine-staging/master/patches/gitapply.sh"
 
 	export	WINE_EBUILD_COMMON="${GENTOO_WINE_EBUILD_COMMON_PACKAGE}-${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}"
 
