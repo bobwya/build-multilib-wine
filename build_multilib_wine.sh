@@ -18,7 +18,7 @@ function cleanup()
 	if ((LOGGING)) && [[ ! -z "${COMPRESSOR_CMD}" && ! -z "${LOG}" && -f "${LOG}" ]]; then
 		${COMPRESSOR_CMD} "${LOG}"
 	fi
-	PGID="$( ps -o pgid "${SCRIPT_PID}" | awk '{ if ($1 ~ /[[:digit:]]+/) print $1 }' )"
+	PGID="$( ps -o pgid "${SCRIPT_PID}" | gawk '{ if ($1 ~ /[[:digit:]]+/) print $1 }' )"
 	kill -9 -"${PGID}" &>/dev/null
 }
 
@@ -46,7 +46,7 @@ function die()
 	# shellcheck disable=SC2173
 	trap '' ABRT INT QUIT TERM KILL STOP
 	[[ -p "${__FIFO_LOG_PIPE}" ]] && printf "%s" "${TTYRESET}"
-	printf "%s" "${error_message}" | awk \
+	printf "%s" "${error_message}" | gawk \
 						-vttycyan_bold="${TTYCYAN_BOLD}" -vttyred_bold="${TTYRED_BOLD}" -vttypurple_bold="${TTYPURPLE_BOLD}" \
 						-vttygreen_bold="${TTYGREEN_BOLD}" -vttyreset="${TTYRESET}" \
 						-vscript_name="${SCRIPT_NAME}" -vfunction_call="${function_call}"	-F'"' \
@@ -359,7 +359,7 @@ function check_package_dependencies()
 {
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
-	local -a array_executables=( "awk" "bzip2" "debootstrap" "git" "lsb_release" "mkfifo" "md5sum" "schroot" "sed" "wget" )
+	local -a array_executables=( "gawk" "bzip2" "debootstrap" "git" "lsb_release" "mkfifo" "md5sum" "schroot" "sed" "wget" )
 	local executable
 
 	for executable in "${array_executables[@]}"; do
@@ -815,7 +815,7 @@ function process_staging_exclude()
 	__staging_patch_file="patches/patchinstall.sh"
 
 	__processed_staging_exclude=$( printf "%s" "${__staging_exclude}" \
-		| awk -vstaging_patch_file="${__staging_patch_file}" 				\
+		| gawk -vstaging_patch_file="${__staging_patch_file}" 				\
 		'
 			function check_patchset_support(patchset,
 				found)
@@ -975,7 +975,7 @@ get_ubuntu_mirror()
 
 	__ubuntu_mirror_list="$(
 		wget -q -O- https://launchpad.net/ubuntu/+archivemirrors | \
-		awk '
+		gawk '
 		{
 			array[++lines]=$0
 		}
@@ -993,7 +993,7 @@ get_ubuntu_mirror()
 	)"
 	__ubuntu_mirror_uri=$(
 		# shellcheck disable=SC2086
-		netselect -s1 -t"${__min_conn_attempts}" -m"${__max_TTL}" ${__ubuntu_mirror_list} 2>/dev/null | awk '{print $2}'
+		netselect -s1 -t"${__min_conn_attempts}" -m"${__max_TTL}" ${__ubuntu_mirror_list} 2>/dev/null | gawk '{print $2}'
 	)
 	if [[ -z "${__ubuntu_mirror_uri_reference}" ]]; then
 		echo "${__ubuntu_mirror_uri}"
@@ -1137,7 +1137,7 @@ setup_chroot_build_env()
 	local -r	chroot_name="${1}"
 	local	session="${SESSION_WINE_INITIALISE}"
 	local -r	session_directory="/var/lib/schroot/session/" \
-			locale_lang="$( locale | awk -F'=' '$1=="LANG" { print $2 }' )" \
+			locale_lang="$( locale | gawk -F'=' '$1=="LANG" { print $2 }' )" \
 			chroot_path="/srv/chroot/${chroot_name}"
 
 	[[ -d "${session_directory}" ]] || mkdir -p "${session_directory}"
@@ -1389,7 +1389,7 @@ function screen_conf_file()
 		&& die "script configuration file: \"${__script_conf_file}\" does not exist"
 
 	# shellcheck disable=SC1004
-	awk 'BEGIN{
+	gawk 'BEGIN{
 			regex_pre_whitespace="^[[:blank:]][[:blank:]]*"
 			regex_post_whitespace="[[:blank:]][[:blank:]]*$"
 			regex_blank_line="^[[:blank:]]*$"
@@ -1402,7 +1402,7 @@ function screen_conf_file()
 			regex_string_value="^\"[^\"]*\"$"
 			regex_boolean_value="^(0|1|false|true|no|yes)"
 			regex_array_string_value="^[(][[:blank:]]*(\"[^\"]*\"[[:blank:]]*)(\"[^\"]*\"[[:blank:]]*)*[)]$"
-			regex_shell_command="\\$([\\(][\\(][^\)]*[\\)][\\)]|[\\(][^\)]*[\\)])"
+			regex_shell_command="\$[\(][^\)]*[\)]"
 			regex_operator="[+][=]|[-][=]|[=]"
 			command_tput="tput setaf 1 ; tput bold"
 			command_tput | getline ttyred_bold
@@ -1523,7 +1523,7 @@ function screen_conf_file()
 				operator=((operator_missing ? ttyblue : ttyred_bold) operator ttyreset)
 			if (!value_valid)
 				value=((value_missing ? ttyblue : ttyred_bold) value ttyreset)
-			else if (gsub(regex_shell_command, (ttyred_bold "&" ttyreset), value))
+			if (gsub(regex_shell_command, (ttyred_bold "&" ttyreset), value))
 				value_valid=0
 
 			error=!(variable_valid && operator_valid && value_valid)
@@ -2063,7 +2063,7 @@ function main()
 	# Global build options and directory defaults
 	if [[ -z "${THREADS}" ]]; then
 		export THREADS
-		THREADS="$(awk '{ threads+=($0 ~ "^processor") }END{ print threads+1 }' /proc/cpuinfo)"
+		THREADS="$(gawk '{ threads+=($0 ~ "^processor") }END{ print threads+1 }' /proc/cpuinfo)"
 	fi
 	export		PREFIX="${PREFIX:-${HOME}/usr}"
 	export		SOURCE_ROOT="${SOURCE_ROOT:-${HOME}/Wine/Source}"
