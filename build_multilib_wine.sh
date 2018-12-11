@@ -866,15 +866,20 @@ function apply_binpatch_array()
 
 	local		__source_directory="${SOURCE_ROOT}/${1}"
 	local -a	__array_patch_files=("${!2}")
-	local	__binary_patch_file __patch_log
+	local -a	__array_sorted_patch_files
+	local		__IFS_save __binary_patch_file __count
 
+	__IFS_save="${IFS}"
+	IFS=$'\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
+	IFS="${__IFS_save}"
 	pushd_wrapper "${__source_directory}"
-	for __binary_patch_file in "${__array_patch_files[@]}"; do
+	__count=0
+	for __binary_patch_file in "${__array_sorted_patch_files[@]}"; do
 		[[ -z "${__binary_patch_file}" ]] && continue
 		[[ -f "${__binary_patch_file}" ]] || die "binary patch file \"${__binary_patch_file}\" does not exist"
 
-		printf "%sApplying binary patch file%s: \"%s${__binary_patch_file}%s\" ...\\n" \
-			"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
+		printf "%s(%03d) Applying binary patch file%s: \"%s${__binary_patch_file}%s\" ...\\n" \
+			"${TTYCYAN}" "$((__count+=1))" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
 		"${SOURCE_ROOT}/${WINE_STAGING_PATCHBIN_SCRIPT}" --nogit < "${__binary_patch_file}" \
 			|| die "binary patch file: \"${__binary_patch_file}\" failed to apply"
 	done
@@ -891,10 +896,13 @@ function apply_patch_array()
 	local		__source_directory="${SOURCE_ROOT}/${1}"
 	local -a	__array_patch_files=("${!2}")
 	local -a	__array_sorted_patch_files
-	local	__count __patch_file __patch_log
+	local		__IFS_save __count __patch_file __patch_log
 
 	printf "%sUsing Source Directory%s: \"%s${__source_directory}%s\" ...\\n" \
 		"${TTYCYAN}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
+	__IFS_save="${IFS}"
+	IFS=$'\n' __array_sorted_patch_files=($(sort <<<"${__array_patch_files[*]}"))
+	IFS="${__IFS_save}"
 	pushd_wrapper "${__source_directory}"
 	__count=0
 	# shellcheck disable=SC2068
@@ -1240,6 +1248,7 @@ function src_prepare()
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.13-fix_build_with_newer_pcap.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
@@ -2042,7 +2051,7 @@ function main()
 	export	WINE_STAGING_PREFIX="v"
 	export	WINE_STAGING_SUFFIX="-unofficial"
 	export	WINE_PREFIX="wine-"
-	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20171106"
+	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20181204"
 
 	# Global URL constants
 	export	WINE_STAGING_GIT_URL="https://github.com/wine-staging/wine-staging.git"
