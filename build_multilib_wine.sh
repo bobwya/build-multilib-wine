@@ -2091,12 +2091,16 @@ function main()
 	fi
 	# Reverse-mangle the stupid Linux Mint Release Code Name overrides
 	case "${LSB_CODENAME}" in
-		tara)
+		# Linux Mint Main Edition (newer first)
+		tara|tessa)
 			LSB_CODENAME="bionic";;
 		sylvia|sonya|serena|sarah)
 			LSB_CODENAME="xenial";;
 		rosa|rafaela|rebecca|qiana)
 			LSB_CODENAME="trusty";;
+		# LMDE (newer first)
+		cindy)
+			LSB_CODENAME="stretch";;
 		betsy)
 			LSB_CODENAME="jessie";;
 	esac
