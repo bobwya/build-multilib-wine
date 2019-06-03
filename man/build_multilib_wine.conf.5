@@ -1,0 +1,259 @@
+.\" 
+.\" build_multilib_wine.conf is the configuration file for the build_multilib_wine build script
+.\" 
+.\" Copyright (C) 2016-2019 Robert Walker
+.\" 
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\" 
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\" 
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+.\" 
+.TH "BUILD_MULTILIB_WINE.CONF" "5" "03 Jun 2019"
+.SH "NAME"
+build_multilib_wine.conf \- custom settings for controlling the build_multilib_wine
+script
+.SH "SYNOPSIS"
+\fB${HOME}/.config/build_multilib_wine/build_multilib_wine.conf\fR
+.SH "DESCRIPTION"
+
+This file contains various variables that are used, by the build_multilib_wine
+script, to change the default settings for any operation. The file has a
+newline\-delimited list of \fI<key>=<value>\fR pairs. To generate a basic:
+\fB${HOME}/.config/build_multilib_wine/build_multilib_wine.conf\fR
+file, with defaults indicated (commented out), use:
+build_multilib_wine generate_conf
+which will write a generic version of the (above) file.
+.br
+\fINote:\fR \fBbuild_multilib_wine\fR will pre-parse the \fBbuild_multilib_wine.conf\fR
+testing that all variables are defined correctly (via various regex tests, etc.).
+.br
+build_multilib_wine will check for settings/value overrides in the following order of precedence:
+.SS (1)
+env variables,
+.SS (2)
+build_multilib_wine.conf configuration,
+.SS (3)
+build_multilib_wine: command-line options,
+.TP
+.SS \fRwhere: \fB(1)\fR=lowest priority ... \fB(3)\fR=highest priority.
+.br
+.SH "VARIABLES"
+.TP
+\fBBUILD_ROOT\fR=\fIdirectory\fR
+Root directory where the binary builds are stored - "out-of-tree" build.
+By default, log files are stored in a subdirectory of the \fBBUILD_ROOT\fR directory.
+.br
+Defaults to: \fBBUILD_ROOT\fR="\fI${HOME}/Wine/Build\fR"
+.TP
+\fBCOLOUR\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fI1\fR" | "\fI0\fR" | "\fItrue\fR" | "\fIfalse\fR" ]
+Select whether to colourise, or not, all terminal and log output.
+.br
+Defaults to: \fBCOLOUR\fR="\fIfalse\fR"
+.TP
+\fBLOG_COMPRESSION\fR=[ "\fIzip2\fR" | "\fIgzip\fR" | "\fIlzma\fR" | "\fIlzop\fR" | "\fInone\fR" | "\fIlz4\fR" | "\fIxz\fR" ]
+Compression to be applied to new log files. Log files are only compressed, when
+the script is exiting. Supported compression algorithms are listed above.
+.br
+Defaults to: \fBLOG_COMPRESSION\fR="\fIxz\fR"
+.TP
+\fBLOG_DIRECTORY\fR=\fIdirectory\fR
+Directory, in which to store log files. The log files record all script output.
+.br
+Defaults to: \fBLOG_DIRECTORY\fR="\fI${HOME}/Wine/Build/Logs\fR"
+.TP
+\fBLOGGING\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fI1\fR" | "\fI0\fR" | "\fItrue\fR" | "\fIfalse\fR" ]
+Enable or disable logging, of all script output. Only applies to build and chroot commands.
+.br
+Defaults to: \fBLOGGING\fR="\fItrue\fR"
+.TP
+\fBLSB_CODENAME\fR="\fILSB codename\fR"
+OS release override (e.g. cross-building for another Debian / Ubuntu version).
+.br
+Defaults to: \fBLSB_CODENAME\fR="\fI$(lsb_release -sc)\fR"
+.TP
+\fBPREFIX\fR=\fIdirectory\fR
+Installation prefix directory in which Wine libraries, binaries, etc. are installed.
+.br
+Defaults to: \fBPREFIX\fR="\fI${HOME}/usr\fR"
+.TP
+\fBSOURCE_ROOT\fR=\fIdirectory\fR
+Root directory where sources are stored i.e. clones of Wine (and Wine-Staging) Git trees.
+.br
+Defaults to: \fBSOURCE_ROOT\fR="\fI$${HOME}/Wine/Source\fR"
+.TP
+\fBTHREADS\fR=\fICPU thread count\fR
+Number of processor threads to use, when compiling. Used by \fBWINE_MAKE_OPTIONS\fR.
+.br
+Defaults to: \fBTHREADS\fR=\fIhardware CPU threads+1\fR
+.TP
+\fBUSER_PATCH_DIRECTORIES\fR=( \fIdirectory\fR(0) [ ... \fIdirectory\fR(N) ] )
+Array of one (or more) directories containing "non-official" user patch files.
+.br
+Additional array entries can be added using:
+.br
+    \fBUSER_PATCH_DIRECTORIES\fR+=( \fIdirectory\fR(N+1) [ ... \fIdirectory\fR(M) ] )
+.br
+\fINote:\fR patches must formatted in a -p1 diff format).
+.br
+Defaults to: \fBUSER_PATCH_DIRECTORIES\fR=\fInone\fR
+.TP
+\fBWINE_ADDON_GLOBAL\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fI1\fR" | "\fI0\fR" | "\fItrue\fR" | "\fIfalse\fR" ]
+Specifies where the wine-addons: \fIwine-gecko\fR , \fIwine-mono\fR ; will be installed to.
+.br
+\fBWINE_ADDON_GLOBAL\fR=1 : install wine-addons relative to the user \fIHOME\fR directory ( "\fI${HOME%/}${WINE_ADDON_GLOBAL_RELPATH%/}\fR" )
+.br
+\fBWINE_ADDON_GLOBAL\fR=0 : install wine-addons relative to the Wine installation path ( "\fI${PREFIX%/}/${WINE_ADDON_RELPATH#/}\fR" )
+.br
+Using: \fBWINE_ADDON_GLOBAL\fR=1 ; allows wine-addons to be shared between different Wine installations.
+.br
+Defaults to: \fBWINE_ADDON_GLOBAL\fR="\fI${WINE_ADDON_GLOBAL}\fR"
+.TP
+\fBWINE_ADDON_GLOBAL_RELPATH\fR=\fIrelative directory path\fR
+Specifies the install path for wine-addons: \fIwine-gecko\fR , \fIwine-mono\fR ; activated with: \fBWINE_ADDON_GLOBAL\fR=1.
+.br
+\fBWINE_ADDON_GLOBAL_RELPATH\fR specifies a path relative to: "\fI${HOME%/}\fR".
+.br
+It is not recommended to change this variable, as Wine has fixed paths, which are searched for addons.
+.br
+Defaults to: \fBWINE_ADDON_GLOBAL_RELPATH\fR="\fI${WINE_ADDON_GLOBAL_RELPATH}\fR"
+.TP
+\fBWINE_ADDON_RELPATH\fR=\fIrelative directory path\fR
+.br
+Specifies the install path for wine-addons: \fIwine-gecko\fR , \fIwine-mono\fR ; activated with: \fBWINE_ADDON_GLOBAL\fR=0.
+.br
+\fBWINE_ADDON_RELPATH\fR specifies a path relative to: "\fI${PREFIX%/}\fR".
+.br
+It is not recommended to change this variable, as Wine has fixed paths, which are searched for addons.
+.br
+Defaults to: \fBWINE_ADDON_RELPATH\fR="\fI${WINE_ADDON_RELPATH}\fR"
+.TP
+\fBWINE_BRANCH\fR=\fIgit-branch\fR
+Wine git branch to build against. This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is disabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fIfalse\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fIfalse\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_BRANCH\fR="\fIrefs/heads/master\fR"
+.TP
+\fBWINE_CFLAGS\fR=\fICFLAGS argument (configure script)\fR
+CFLAGS ('C' compiler flags) to pass to Wine configure script.
+[src-configure]
+.br
+Defaults to: \fBWINE_CFLAGS\fR="\fI-march=native -mtune=native\fR"
+.TP
+\fBWINE_COMMIT\fR=\fIgit-commit\fR
+Wine git commit to build against. This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is disabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fIfalse\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fIfalse\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_COMMIT\fR=\fInone\fR
+.TP
+\fBWINE_CONFIGURATION\fR="\fIconfigure options\fR"
+Specify options to pass to the Wine configuration phase.
+[src-configure]
+.br
+Defaults to: \fBWINE_CONFIGURATION\fR="\fI--without-hal --without-v4l --without-oss\fR"
+.TP
+\fBWINE_MAKE_OPTIONS\fR=\fIarguments to make command\fR
+Make options to pass to the make command, when compiling wine.
+[src-compile]
+.br
+Defaults to: \fBWINE_MAKE_OPTIONS\fR="-j\fI$((THREADS+1))"
+.TP
+\fBWINE_STAGING\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fI1\fR" | "\fI0\fR" | "\fItrue\fR" | "\fIfalse\fR" ]
+A build phase (only) option that specifies whether we wish to apply (or not) the Wine Staging patchsets.
+.br
+The default is to apply all the Wine Staging patchsets, with some (optional) Wine Staging patchset exclusions specified by:
+.br
+\fBWINE_STAGING_EXCLUDE\fR=... (see below, for more information about this option)
+.br
+Defaults to: \fBWINE_STAGING\fR="0"
+.TP
+\fBWINE_STAGING_BRANCH\fR=\fIgit-branch\fR
+Wine-Staging git branch to build against. This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is enabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fItrue\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fItrue\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_STAGING_BRANCH\fR="\fIrefs/heads/master\fR"
+.TP
+\fBWINE_STAGING_COMMIT\fR=\fIgit-commit\fR
+Wine-Staging git commit to build against. This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is enabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fItrue\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fItrue\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_STAGING_COMMIT\fR=\fI<none>\fR
+.TP
+\fBWINE_STAGING_EXCLUDE\fR=\fIpatchset\fR(1) [ ... \fIpatchset\fR(N) ]
+Name(s) of specific Wine-Staging patchset(s), to optionally disable.
+[src-prepare]
+.br
+Defaults to: \fBWINE_STAGING_EXCLUDE\fR="\fIconfigure-OSMesa winhlp32-Flex_Workaround\fR"
+.TP
+\fBWINE_STAGING_VERSION\fR=\fInumeric-version\fR
+Wine-Staging version to build. Specified as a wine-staging release version (without the git tag prefix).
+.br
+This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is enabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fItrue\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fItrue\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_STAGING_VERSION\fR=\fInone\fR
+.TP
+\fBWINE_VERSION\fR=\fInumeric-version\fR
+Wine version to build. Specified as a wine release version (without the git tag prefix).
+.br
+This variable applies only during build commands.
+.br
+Requires that the Wine Staging patchset is disabled, for the current Wine build:
+.br
+    \fBWINE_STAGING\fR="\fIfalse\fR"   (configuration option)
+.br
+    \fB--wine-staging\fR="\fIfalse\fR" (build option, command line argument)
+.br
+Defaults to: \fBWINE_VERSION\fR=\fInone\fR
+.TP
+\fBWORKING_PATCHES_DIRECTORY\fR=\fIdirectory\fR
+Directory to store additional stock Wine patches.
+.br
+Defaults to: \fBWORKING_PATCHES_DIRECTORY\fR="\fI${HOME}/Wine/Source/patches\fR"
+.br
+.SH "REPORTING BUGS"
+Please report issues at: <\fIhttps://github.com/bobwya/build-multilib-wine/issues\fR>
+.SH "AUTHORS"
+.nf
+Written by Robert Walker <bob.mt.wya@gmail.com>
+.fi
+.SH "FILES"
+.TP
+\fI${HOME}/.config/build_multilib_wine/build_multilib_wine.conf\fR
+Contains variables for controlling the operation of the build_multilib_wine script.
+.SH "SEE ALSO"
+.br
+.BR build_multilib_wine (1).

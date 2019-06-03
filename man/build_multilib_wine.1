@@ -1,0 +1,188 @@
+.\" 
+.\" build_multilib_wine is multilib Wine (& Wine Staging) build script
+.\" 
+.\" Copyright (C) 2016-2019 Robert Walker
+.\" 
+.\" This program is free software; you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation; either version 2 of the License, or
+.\" (at your option) any later version.
+.\" 
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\" 
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+.\" 
+.TH BUILD_MULTILIB_WINE 1 "03 Jun 2019".SH NAME
+\fBbuild_multilib_wine\fR \- monolithic BASH script to build multilib Wine, from source, on Debian or Ubuntu™
+.SH SYNOPSIS
+\fBbuild_multilib_wine\fR [ \fB--colour\fR=... ] [ \fB--logging\fR=... ] [ \fB--log-compression\fR... ] [\fB--log-directory\fR=... ] [ *\fIOPTION (build phase)\fR [ ... *\fIOPTION (build phase)\fR ] ] [--] [ \fBsrc-fetch\fR ] [ \fBsrc-prepare\fR ] [ \fBsrc-configure\fR ] [ \fBsrc-compile\fR ] [ \fBsrc-install\fR ] | \fBbuild-all\fR
+.br
+\fBbuild_multilib_wine\fR [ \fB--colour\fR=... ] [--] \fBgenerate-conf\fR
+.br
+\fBbuild_multilib_wine\fR [ \fB--colour\fR=... ] [ \fB--logging\fR=... ] [ \fB--log-compression\fR... ] [\fB--log-directory\fR=... ] [--] \fBsetup-chroot\fR | \fBupgrade-chroot\fR
+.br
+\fBbuild_multilib_wine\fR [ \fB--colour\fR=... ] [--] \fBversion\fR
+.SS \fI*OPTION (build phase)\fR :
+.br
+[ \fB--build-directory\fR \fIdirectory\fR ]  [ \fB--patch-directory\fR "\fIdirectory\fR(1)" [ ... \fB--patch-directory "\fIdirectory\fR(N)" ] ]  [ \fB--source-directory\fR \fIdirectory\fR ]  [ \fB--prefix\fR \fIdirectory\fR ] 
+.br
+\fB--wine-staging\fR="\fIno\fR" | "\fIfalse\fR" | "\fI0\fR"  [ \fB--wine-branch\fR=\fIgit-branch\fR         | \fB--wine-commit\fR="\fIcommit-hash\fR"         | \fB--wine-version\fR=\fInumeric-version\fR         ] 
+.br
+\fB--wine-staging\fR="\fIyes\fR" | "\fItrue\fR" | "\fI1\fR"  [ \fB--wine-staging-branch\fR=\fIgit-branch\fR | \fB--wine-staging-commit\fR="\fIcommit-hash\fR" | \fB--wine-staging-version\fR=\fInumeric-version\fR ] 
+.SH "DESCRIPTION"
+This manual page describes the
+.BR build_multilib_wine
+command.
+.br
+The 
+.BR build_multilib_wine
+script can be used to build Wine, or Wine Staging, with the option
+to specify multiple directories of additional user patchsets. The script supports building
+Wine on the Debian and Ubuntu™ Linux distributions (Ubuntu™-derivatives, like Linux-Mint,
+are also supported). The script uses dual chroot (Schroot) environments (32-bit and 64-bit).
+.P
+.BR build_multilib_wine 
+supports various simple commands. \fI Note:\fR build phase options can only be combined with build commands.
+.br
+.SS Exit status:
+.TP
+0
+if OK (successful execution),
+.TP
+1
+if any error occurs during execution.
+.SH OPTIONS
+.SS Global
+.TP
+\fB\-\-colour\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fItrue\fR" | "\fIfalse\fR" | "\fI1\fR" | "\fI0\fR" ]"
+Select whether terminal output and logs are colourised or not.
+.TP
+\fB\-\-logging\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fItrue\fR" | "\fIfalse\fR" | "\fI1\fR" | "\fI0\fR" ]"
+Select whether all terminal output is written to a time/date-stamped log file.
+.TP
+\fB\-\-log\-compression\fR=[ "\fIbzip2\fR" | "\fIgzip\fR" | "\fIlzma\fR" | "\fIlzop\fR" | "\fInone\fR" | "\fIlz4\fR" | "\fIxz\fR" ]
+Select whether all terminal output is written to a time/date-stamped log file.
+.TP
+\fB\-\-log\-directory\fR=\fIdirectory\fR
+Use the specified directory, to store the log file, for the current command.
+.SS Build Phases (only)
+.TP
+\fB\-\-wine\-staging\fR=[ "\fIyes\fR" | "\fIno\fR" | "\fItrue\fR" | "\fIfalse\fR" | "\fI1\fR" | "\fI0\fR" ]"
+Select whether to build Wine or Wine Staging.
+.TP
+\fB\-\-wine\-branch\fR=\fIgit\-branch\fR
+Select the Wine git branch to build.
+.TP
+\fB\-\-wine\-commit\fR=\fIcommit\-hash\fR
+Select a specific Wine git commit to build against.
+.TP
+\fB\-\-wine\-version\fR=\fInumeric\-version\fR
+Select a specific Wine version to build.
+.TP
+\fB\-\-wine\-staging\-branch\fR=\fIgit\-branch\fR
+Select the Wine Staging git branch to build.
+.TP
+\fB\-\-wine\-staging\-commit\fR=\fIcommit\-hash\fR
+Select a specific Wine Staging git commit to build against.
+.TP
+\fB\-\-wine\-staging\-version\fR=\fInumeric\-version\fR
+Select a specific Wine Staging version to build.
+.TP
+\fB\-\-build\-directory\fR \fIdirectory\fR
+Select the root build directory (stores Wine build trees and log files)
+.TP
+\fB\-\-patch\-directory\fR \fIdirectory\fR(1) [ ... \fB\-\-patch\-directory\fR \fIdirectory\fR(N) ]
+Specify a directory (or directories) containing user patches.
+.TP
+\fB\-\-source\-directory\fR \fIdirectory\fR
+Select the root source directory (stores generic/stock patches, Wine and Wine Staging git trees)
+.TP
+\fB\-\-prefix\fR \fIdirectory\fR
+Specify a target root directory, in which to install the multilib Wine build.
+.br
+\fINote\fR: this must be a subdirectory of the user's "\fIHOME\fR" directory.
+.br
+The \fIHOME\fR directory is a writeable mountpoint, accessible within both Schroot environments.
+.SH COMMANDS
+.TP
+.BR generate-conf
+Generate a stock configuration file for build_multilib_wine.
+The default location for this newly created configuration file, is:
+.br
+.I  \*(lq${HOME}/.config/build_multilib_wine/build_multilib_wine.conf\*(rq
+.TP
+.BI setup-chroot
+Setup the 32-bit and 64-bit (Schroot) Chroot Environments.
+This command also installs the Debian / Ubuntu™ base development libraries for Wine, in the dual Chroot Environments.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.TP
+.BI upgrade-chroot
+Upgrade the packages installed to the 32-bit and 64-bit (Schroot) Chroot Environments.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (1)-(5)
+.TP
+.B build-all
+.br
+Meta-command, alias for the sequence of commands: \fBsrc-fetch\fR \fBsrc-prepare\fR \fBsrc-configure\fR \fBsrc-compile\fR \fBsrc-install\fR
+.br
+(for further information, see below)
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (1)
+.TP
+.B src-fetch
+.br
+Run the (git) source fetch phase, for wine, and wine-staging, git trees.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (2)
+.TP
+.B src-prepare
+.br
+Run source prepare phase. During this phase, base patches are applied and (BASH/sed) configuration file alterations are made.
+In addition, during this phase, the Wine Staging patchset and any (specified) user patchsets are applied.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (3)
+.TP
+.B src-configure
+.br
+Run source configure phase. This phase is executed once in 32-bit Chroot environment: wine32-tools ; and once in the 64-bit Chroot environment: wine64
+.br
+\fINote\fR: running the configure phase for the 32-bit Chroot: wine32 ; is deferred to the end of the next (src-compile) phase.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (4)
+.TP
+.B src-compile
+.br
+Run source compile phase. This phase is executed once in 32-bit Chroot environment: wine32-tools ; and once in the 64-bit Chroot environment: wine64
+The (deferred) configure phase for the 32-bit Chroot directory: wine32 ; is run first in this phase. Then the build directory: wine32 ; is compiled.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.SS (5)
+.TP
+.B src-install
+.br
+Run source install phase. This phase is executed once for the 32-bit Chroot environment: wine32 ; and once for the 64-bit Chroot environment directory: wine64
+.br
+\fINote\fR: the install prefix must be a subdirectory of the user's \fIHOME\fR directory.
+This is because the \fIHOME\fR directory is a writeable mountpoint, accessible within both Schroot environments.
+.br
+\fINote\fR: this command runs as \fBroot\fR.
+.TP
+.BI version
+Display the script version and exit.
+.SH "AUTHOR"
+Written by Robert Walker <bob.mt.wya@gmail.com>
+.SH "REPORTING BUGS"
+Please report issues at: <\fIhttps://github.com/bobwya/build-multilib-wine/issues\fR>
+.SH "SEE ALSO"
+.BR build_multilib_wine.conf (5).
