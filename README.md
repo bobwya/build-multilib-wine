@@ -1,23 +1,62 @@
-## Debian/Ubuntu Wine/Wine Staging Build Script (build-multilib-wine)
+## Debian/Ubuntu™ build script for compiling multilib Wine/Wine Staging (build-multilib-wine)
 
-###  Downloading
 
-If you chose to download the build-multilib-wine script directly from Github (rather than cloning the Git repository)... When viewing the script file ensure you click the **RAW** button at the top of the file... Otherwise when you save the webpage, with your Web Browser, you will literally download that **html** Github webpage and not the bare **BASH script**, text file!
+###  Installing
+
+Download and install the latest git master tarball:
+```
+    cd ~/Downloads \
+    && wget 'https://github.com//bobwya/build-multilib-wine/archive/master.tar.gz' -O 'build-multilib-wine-master.tar.gz' \
+    && tar xvfa 'build-multilib-wine-master.tar.gz' \
+    && cd 'build-multilib-wine-master' \
+    && sudo make install
+```
+
+Download and install the latest release version tarball:
+```
+    cd ~/Downloads \
+    && wget 'https://github.com/bobwya/build-multilib-wine/releases/latest' -O 'build-multilib-wine.release.json' \
+    && export release_tag \
+    && release_tag="$(sed -n '\@<a href=\"/bobwya/build-multilib-wine/releases/tag/@{s@^.*<a href=\".*releases/tag/\(.*\)\">.*$@\1@g;p}' 'build-multilib-wine.release.json')" \
+    && { [[ -z "${release_tag}" ]] && release_tag="master"; } \
+    && wget "https://github.com//bobwya/build-multilib-wine/archive/${release_tag}.tar.gz" -O "build-multilib-wine-${release_tag}.tar.gz" \
+    && tar xvfa "build-multilib-wine-${release_tag}.tar.gz" \
+    && cd "build-multilib-wine-${release_tag}" \
+    && sudo make install
+```
 
 ###  Usage
 
-
-Install the script in your user's PATH. Ensure that you have setup a **root** user password set - as the script uses **su** to escalate privileges, as and when required. **Note**: by default **Ubuntu** only sets up **sudo** privileges.
+Ensure that you have a **root** user password set.
+The script requires **su** to escalate privileges, as and when required.
+**Note**: by default **Ubuntu™** only sets up **sudo** privileges.
 
 The script has a detailed help page with the all the supported options:
 ```
-    build_multilib_wine.sh help
+    build_multilib_wine help
 ```
-An optional global configuration file is used by, the build script, to specify various global options, Wine/Wine Staging version to build, logging options, colourised output, etc. A command exists to dump a default configuration file - to the **/etc/build_multilib_wine.conf** path:
+
+Also see the **build_multilib_wine** man page:
+```
+    man build_multilib_wine # (1)
+```
+and the **build_multilib_wine.conf** configuration file man page:
+```
+    man build_multilib_wine.conf # (5)
+```
+
+A default / stock configuration file can be created with:
 ```
     build_multilib_wine.sh generate-conf
 ```
-*It is recommended new users do this first*. As the configuration file will show what common script options will need to be specfied. This file be edited (as **root**) to suit the users requirements.
+
+*It is recommended new users do this first*. As the configuration file will show what common script options will need to be specified.
+This file can then be edited to suit the users requirements.
+
+This configuration file will be created by default as:
+```
+    "${HOME}/.config/build_multilib_wine/build_multilib_wine.conf"
+```
 
 The default directory options are typically OK for most users:
 ```
@@ -26,9 +65,9 @@ The default directory options are typically OK for most users:
     BUILD_ROOT="${HOME}/Wine/Build"         # default directory for Wine builds
     LOG_DIRECTORY="${HOME}/Wine/Build/Logs" # default directory for build log files
 ```
-All of these directories are shared with both of the Schroot environments.
- 
-At present the script has some Environment variables that can be overridden to change some advanced options: 
+All of these directories are shared with both of the Schroot environments (as **HOME** is a common mount-point).
+
+At present the script has some Environment variables that can be overridden to change some advanced options:
 ```
         WINE_CONFIG_OPTIONS="-without-hal --without-v4l --without-oss"
         WINE_CFLAGS="-march=native -mtune=native"
@@ -36,62 +75,74 @@ At present the script has some Environment variables that can be overridden to c
 ```
 Typically one of more of these variables would be set (if required) in the global configuration file.
 
-Finally once you've built your new shiney custom Wine version...
-"How do I run it?" You might ask...
-The default install path is:
+###  Using your custom Wine build(s)
+
+Ensure that you have the **winehq-devel** (or **winehq-staging**) staging packages installed - so that
+you have the necessary runtime dependencies required by Wine.
+
+Once you've managed to compile your custom version of Wine, it will (by default) be installed to:
 ```
     "${HOME}/usr"
 ```
-So to run your custom Wine version use the full path, e.g.:
+To run your custom Wine version use the **full path** for all the executable, e.g.:
 ```
     ~/usr/bin/wine ...
     ~/usr/bin/winecfg
 ```
 
-Backported, Wine build time patches, carried over my Gentoo ebuild, are selectively applied to the Wine Git tree.
-Depending on the Wine Git Commit being built... Any of these patches that are already committed, as a parent commit in the Wine Git tree, are automatically excluded.
-A separate **gentoo_wine_ebuild_common** repository tarball is downloaded to supply this patchset.
 
-All patches from the Wine Staging patch-set are applied by default (except for a small number - that are patched separately from the Wine Staging patch install script). However any number of the Wine Staging (sub-)patch-sets can be selectively disabled. Again this is only possible via overriding Environment variables - typically in the global configuration file.
+###  Logging
 
-User patches can applied - any number of directories, containing patch files, can be specified. Thereby allowing a custom Wine version to be built from Source.
+Schroot setup/upgrade and all the build process can be optionally logged. This is done using a separate thread (via FIFO pipe). Optionally on completion of the selected build phases, or Schroot operations - the log file can be automatically compressed (all standard compressors are supported). Log files and stdout console output can be colourised according to user preference.
 
-Schroot setup and the build process can be optionally logged using a separate thread (via FIFO pipe). Optionally on completion of the selected build phases, or Schroot operations - the log file can be automatically compressed (all the main Linux compressors are supported). Log files and stdout console output can be colourised according to user preference.
+The default directory, for storing the **build-multilib-wine** log files, is:
+```
+    LOG_DIRECTORY="${HOME}/Wine/Build/Logs" # default directory for build log files
+```
 
-At present the build script carefully installs **all** necessary development libraries to build Wine or Wine Staging from Source. But these libraries are only installed in the Chroot Environments.
-There is no attempt to install necessary runtime dependencies (mainly 32-bit libraries) on the Host Debian or Ubuntu(tm) System. This will be added in at a later stage (perhaps a small helper script). This isn't a package builder! So it's recommended to install one the WineHQ official packages (**winehq-devel** or **winehq-staging**) alongside your usage of this script... These packages will pull in the necessary runtime library dependencies, plus install package icons and desktop files.
+###  Technical
 
+The dual Schroot chroot environments are created as subdirectories of the directory:
+```
+/srv/chroot/ ...
+```
+using individual (per-chroot) Schroot configuration files within the directory:
+```
+/etc/schroot/chroot.d/
+```
+So an example setup would include a 32-bit configuration file:
+```
+disco_wine_32bit.conf
 
-###  Discussion
+[disco_wine_32bit]
+description=Ubuntu 19.04 (32-bit)
+personality=linux32
+directory=/srv/chroot/disco_wine_32bit
+message-verbosity=verbose
+root-users=root
+type=directory
+users=robert
+preserve-environment=true
+```
+and a 64-bit configuration file:
+```
+disco_wine_32bit.conf
 
+[disco_wine_64bit]
+description=Ubuntu 19.04 (64-bit)
+directory=/srv/chroot/disco_wine_64bit
+message-verbosity=verbose
+root-users=root
+type=directory
+users=robert
+preserve-environment=true
+```
 
-This Github repository houses a monolithic BASH script to build multilib Wine / Wine Staging, from source, on Debian or Ubuntu(tm). Utilising dual Chroot Environments. Ubuntu 16.04 Xenial (or newer) is a hard requirement for the Chroot Environments.
+Logging is done with a separate logging thread... This was done so a FIFO pipe could be utilised. This proved to be simplier and more reliable, than say using TTY redirection, etc. Commands are simply grouped into blocks, with all output redirected to the input of the FIFO pipe. The actual logging thread reads the data coming out of the FIFO pipe output. This is always dumped to the standard console output stream (**stdout**) and (optionally) is written, uncompressed, to a log file. Log file compression is deferred to completion, of the current script operation, to support more advanced (non-streaming) compression techniques, like **lzma**. Deferred compression will always achieve better compression ratios (vs. streaming compression) anyway.
 
-All recent Debian or Ubuntu(tm) distribution releases have packaging errors with some of the 32-bit and 64-bit multilib development libraries required for Wine. Wine requires a complete multilib build/development environment to be built from Source. The vast majority of Windows binaries are still 32-bit (including all legacy applications).
+The script was originally intended to use **sudo** to gain **root** privileges, as required. However there are a number of flaws, in the way **sudo** works, that made this very difficult. The most significant problem is that subshells, created with **sudo**, do not inherit any exported functions and variables, from the parent shell. Working around this limitation (alone) would have been (potentially) quite messy. So the final version of the script uses **su** to gain **root** privileges, as required. Unfortunately, this does require that Ubuntu user's have a **root** password set.
 
-It appears, from the WineHQ forums, that Ubuntu Wine users (and pseudo distributions like "Linux Mint") meet a bit a brick wall if they want to apply non-official patches to Wine. Building multilib Wine from source - without the necessary 32-bit development libraries - is quite tricky!
+###  Issues (bugs)
 
-To overcome the problem of building Wine from Source on a modern Debian or Ubuntu(tm) release, requires access to a true 32-bit Ubuntu system and repositories on a 64-bit System. This is because multilib Wine is effectively built/compiled in 2 cycles on a 64-bit System: 32-bit and 64-bit respectively.
-
-Modern Debian and Ubuntu(tm) releases have issues co-installing many Wine development 32-bit and 64-bit libraries (due to Debian multilib packaging errors). It is necessary to use a more "creative build process" to workaround this. The main available and solutions that can be used are:
-
-1. **build multilib Wine natively on a 64-bit Debian / Ubuntu(tm) system**
-  * This works - but 32-bit support will not be fully functional in the Wine build - due to a number of critical development libraries that will be missing.
-
-2. **build multilib Wine on a 64-bit Debian / Ubuntu(tm) using a 32-bit Chroot**
-  * Performant, doesn't pollute the host system with unnecessary development libraries, no missing 32-bit development libraries, Chroot images can be minimal in size and thereby use the least possible disk space.
-
-3. **build multilib Wine on 64-bit Debian / Ubuntu(tm) using a 32-bit LXC (Linux Container)**
-  * Performant, doesn't need to pollute the host system with unnecessary development libraries (if using dual architecture containers), no missing 32-bit development libraries. LXC image can be relatively small, but can be difficult to setup (steep learning curve).
-
-4. **build multilib Wine on 64-bit Debian / Ubuntu(tm) using a Virtual Machine with a 32-bit Debian / Ubuntu(tm) image (VM - e.g. VirtualBox)**
-  * Overhead (CPU), hard to link the 32-bit Wine build to the native 64-bit Wine build, disk usage hog, not a very practical solution!
-
-Also see: https://wiki.winehq.org/Building_Wine
-
-
-###  Closing Notes
-
-
-I should point out I'm a Gentoo user - only an occasional Ubuntu user... So bear that in mind if the script makes some misassumptions about the Debian Schroot utility or Debian package management! Pull requests happily received!
-
+If you have an issue this script then please use the repository Github issue tracker: [GitHub: bobwya / build-multilib-wine Issues](https://github.com/bobwya/build-multilib-wine/issues)
+Where appropriate, please attach a script log file (see above: **Logging** section).
