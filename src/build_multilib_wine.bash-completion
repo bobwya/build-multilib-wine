@@ -1,0 +1,691 @@
+# build_multilib_wine(1) completion                               -*- shell-script -*-
+#
+# Copyright:
+#   Copyright (C) 2019 Rob Walker <bob.mt.wya!gmail.com>
+#
+# License:
+#   This program is free software; you can redistribute it and/or
+#   modify it under the terms of the GNU Lesser General Public
+#   License as published by the Free Software Foundation; either
+#   version 2.1 of the License, or (at your option) any later
+#   version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU Lesser General Public License for more details.
+#
+#   You should have received a copy of the GNU Lesser General Public
+#   License along with this program.  If not, see
+#   <https://www.gnu.org/licenses/>.
+
+
+##### Define Global constants / variables #####
+SCRIPT_NAME="build_multilib_wine"
+BUILD_MULTILIB_WINE_PATH="$(command -v "${SCRIPT_NAME}")"
+
+
+##### Define Global regular expression constants #####
+VARIABLE_NAME_REGEXP="[_[:alpha:]][_[:alnum:]]+"
+VARIABLE_NAME_MATCH_REGEXP="(COLOUR|LOGGING|SCRIPT_CONFIG|SCRIPT_CONFIG_DIRECTORY|SOURCE_ROOT|WINE_PREFIX|WINE_STAGING|WINE_STAGING_PREFIX|WINE_STAGING_SUFFIX|__WINE_STAGING_VERSION|__WINE_VERSION)"
+
+##### Define Global option list matches #####
+BOOLEAN_OPTION_LIST=" yes no YES NO 1 0 true false TRUE FALSE "
+LOG_COMPRESSORS_LIST=" bzip2 gzip lzma lzop none lz4 xz "
+
+
+##### Find and wrap a functioning awk variant #####
+AWK="$(command -v awk 2>/dev/null || command -v mawk 2>/dev/null)"
+if [[ -z "${AWK}" ]] || "${AWK}" -W version 2>/dev/null | grep -q -E '^mawk 1\.3\.3'; then
+	AWK="$(command -v gawk 2>/dev/null || command -v nawk 2>/dev/null)"
+	[[ -z "${AWK}" ]] && AWK="$(command -v busybox)" && AWK="${AWK}${AWK:+ awk}"
+fi
+
+##### Define shared awk functions #####
+
+export awk_block_split awk_function_tokenise_line
+
+# awk_block_split
+#
+# Parameters: <none>
+#   stdin   >    :  newline separated  (string, list)
+#   stdout  <    :  space separated    (string, list)
+#
+# Description:
+#   awk main block, converts a newline-separated list
+#   to a space separated list.
+#
+# shellcheck disable=SC2016
+awk_block_split=\
+'{ if (FNR==1) printf("%s",$0); else printf(" %s",$0); }'
+
+
+# awk_block_drop_nonmatched_assignment_values
+#
+# Parameters:
+#   1       >  comp_value  :  current completion word                   (string)
+#   stdin   >              :  all potential variable assignment values  (string, list)
+#   stdout  <              :  matching variable assignment expression   (string, list)
+#
+# Description:
+#   awk main block, processes a list potential assignment values.
+#   Drop assignment values that do not match the current BASH completion word
+#   (comp_value).
+#
+# shellcheck disable=SC2016
+awk_block_drop_nonmatched_assignment_values=\
+'BEGIN{
+	comp_value_length=length(comp_value)
+}
+{
+	for (i=1 ; i<=NF ; ++i) {
+		if (length($i) < comp_value_length) continue
+
+		if (substr($i,1,comp_value_length) == comp_value)
+			printf("%s ", $i)
+	}
+}'
+
+
+# awk_block_export_global_variables()
+#
+# Parameters:
+#   1        >  variable_name_regexp   :  regular expression to match specific BASH variable names  (string)
+#   [stdin]  >                         :  build_multilib_wine script                                (string, list)
+#   [stdout] <  assignment_expression  :  (matching) variable assignment expression                 (string, list)
+#
+# Description:
+#   awk main block to extract a small set of specified global (uppercase) BASH variable assignments.
+#   These exported values can be sourced to set them in this (BASH completion) script.
+#
+# shellcheck disable=SC2016
+awk_block_export_global_variables=\
+'{
+	for (i=1 ; i<=NF ; ++i) {
+		gsub("[;][;]$", "", $i)
+
+		if ($i ~ (variable_name_regexp "=\".*\"$")) {
+			printf("export %s\n", $i)
+		}
+		else if ($i ~ (variable_name_regexp "=\"")) {
+			assignment_expression=($i)
+		}
+		else if (assignment_expression) {
+			assignment_expression=(assignment_expression $i)
+			if (assignment_expression ~ "\"$") {
+				printf("export %s\n", assignment_expression)
+				assignment_expression=""
+			}
+		}
+	}
+}'
+
+
+##### Define general BASH helper functions #####
+
+# function parse_script_read_global_options()
+#
+# Parameters: <none>
+#
+# Description:
+#   Parses the build_multilib_wine script to set all required global variables,
+#   so that the Wine and Wine Staging source directories can be accessed (to
+#   scrape Wine commit and tag lists).
+#
+function parse_script_read_global_options()
+{
+	(($# == 0)) || return 1
+
+	# shellcheck source=/dev/null
+	source <(
+		"${AWK}" -F'[[:blank:]]+' \
+		-vvariable_name_regexp="${VARIABLE_NAME_MATCH_REGEXP}" \
+		"${awk_block_export_global_variables}" \
+		"${BUILD_MULTILIB_WINE_PATH}"
+	)
+
+	# shellcheck source=/dev/null
+	[[ -f "${SCRIPT_CONFIG}" ]] && . "${SCRIPT_CONFIG}"
+}
+
+
+# function parse_boolean_option()
+#
+# Parameters:
+#     1>  __option       : boolean value description                (string)
+#   [ 2<  __option_value : option variable to set to boolean value  (boolean, reference) ]
+#
+# Description:
+#   Converts a boolean value string ("1", "0", "yes", "no", "true", "false")
+#   to a simple boolean 0 / 1 value.
+#   Open exit either: set the __option_value reference variable, or output, the
+#   determined boolean value.
+#
+function parse_boolean_option()
+{
+	(((1 <= $#) && ($# <= 2))) || return 1
+
+	local	__option="${1}" __option_name_reference="${2}" \
+			__option_value
+
+	[[ -z "${__option}" ]] && return 1
+
+	case "${__option}" in
+		0|[Nn][Oo]|[Nn]|[Ff][Aa][Ll][Ss][Ee]|[Ff])
+			__option_value=0
+			;;
+		1|[Yy][Ee][Ss]|[Yy]|[Tt][Rr][Uu][Ee]|[Tt])
+			__option_value=1
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	if [[ -z "${__option_name_reference}" ]]; then
+		echo "${__option_value}"
+	elif [[ "${__option_name_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n option_name="${__option_name_reference}"
+		# shellcheck disable=SC2034
+		option_name="${__option_value}"
+	else
+		return 1
+	fi
+}
+
+
+# function _git_get_tag_list()
+#
+# Parameters:
+#     1 >  __git_directory            : git directory         (string)
+#     2 >  __git_branch               : git branch to scrape  (string)
+#     3 >  __git_tag_match            : git tag match         (string)
+#   [ 4<   __git_tag_list_reference   : git tag list          (string array, reference) ]
+#
+# Description:
+#   Returns all git tags, matching the expression git_tag_match, from the git branch
+#   (__git_branch), from the git repository, located in the specified git directory
+#   (__git_directory).
+#   Git tags are returned in the reference variable: git_tag_list
+#
+function _git_get_tag_list()
+{
+	(((3 <= $#) && ($# <= 4))) || return 1
+
+	local	__git_directory="${1}" __git_branch="${2}" \
+		__git_tag_match="${3}" __git_tag_list_reference="${4}" \
+		__git_tag_list=""
+
+	if [[ -n "${__git_directory}" ]] && pushd "${__git_directory}" &>/dev/null; then
+		__git_tag_list="$(
+			# shellcheck disable=SC2016
+			git tag --list "${__git_tag_match}*" "${__git_branch}" \
+				| "${AWK}" -vgit_tag_match="${__git_tag_match}" '{ sub(("^" git_tag_match),""); print $0 }'
+		)"
+		# shellcheck disable=SC2164
+		popd &>/dev/null
+	fi
+
+	if [[ -z "${__git_tag_list_reference}" ]]; then
+		echo "${__git_tag_list}"
+	elif [[ "${__git_tag_list_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n git_tag_list_array="${__git_tag_list_reference}"
+		# shellcheck disable=SC2034
+		git_tag_list_array=( "${__git_tag_list}" )
+	else
+		return 1
+	fi
+}
+
+
+# function _git_get_commit_list()
+#
+# Parameters:
+#     1 >  __git_directory               : git directory         (string)
+#     2 >  __git_branch                  : git branch to scrape  (string)
+#   [ 3<   __git_commit_list_reference   : git commit list       (string array, reference) ]
+#
+# Description:
+#   Returns all git commits from the git branch (__git_branch), from
+#   the git repository, located in the specified git directory (__git_directory).
+#   The Git commit list is either returned in the reference variable:
+#   __git_commit_list_reference ; or via stdout.
+#
+function _git_get_commit_list()
+{
+	(((2 <= $#) && ($# <= 3))) || return 1
+
+	local	__git_directory="${1}" __git_branch="${2}" \
+		__git_commit_list_reference="${3}" \
+		__git_commit_list
+
+	if [[ -n "${__git_directory}" ]] && pushd "${__git_directory}" &>/dev/null; then
+		__git_commit_list="$( git log --pretty=format:%H "${__git_branch}" )" \
+			|| __git_commit_list=""
+		# shellcheck disable=SC2164
+		popd &>/dev/null
+	fi
+
+	if [[ -z "${__git_commit_list_reference}" ]]; then
+		echo "${__git_commit_list}"
+	elif [[ "${__git_commit_list_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n git_branch_list_array="${__git_commit_list_reference}"
+		# shellcheck disable=SC2034
+		git_branch_list_array=( "${__git_commit_list}" )
+	else
+		return 1
+	fi
+}
+
+# function _git_get_branch_list()
+#
+# Parameters:
+#     1 >  __git_directory               : git directory         (string)
+#   [ 2<   __git_branch_list_reference   : git commit list       (string array, reference) ]
+#
+# Description:
+#   Returns all git branches, from the git repository, located in the specified git
+#   directory (__git_directory).
+#   Git branches are either returned in the reference variable: __git_branch_list_reference ;
+#   or via stdout.
+#
+function _git_get_branch_list()
+{
+	(((1 <= $#) && ($# <= 2))) || return 1
+
+	local	__git_directory="${1}" \
+		__git_branch_list_reference="${2}" \
+		__git_branch_list=""
+
+	if [[ -n "${__git_directory}" ]] && pushd "${__git_directory}" &>/dev/null; then
+		__git_branch_list="$(
+			git branch -a --format '%(refname)' \
+			|  awk  '{
+				if (sub("^refs/(heads|remotes)/", "") && ($0 != "%(refname)"))
+					printf("%s ", $0)
+			}'
+		)" || __git_branch_list=""
+		# shellcheck disable=SC2164
+		popd &>/dev/null
+	fi
+
+	if [[ -z "${__git_branch_list_reference}" ]]; then
+		echo "${__git_branch_list}"
+	elif [[ "${__git_branch_list_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		# shellcheck disable=SC2178
+		declare -n git_branch_list_array="${__git_branch_list_reference}"
+		# shellcheck disable=SC2034
+		git_branch_list_array=( "${__git_branch_list}" )
+	else
+		return 1
+	fi
+}
+
+
+# function convert_assignment_option()
+#
+# Parameters:
+#     1 >  __comp_word         : comp word to test                              (string)
+#     2 >  __comp_value        : comp value                                     (string)
+#   [ 3<   __reply_reference   : reply list, from assignment words              (string array, reference) ]
+#      <   return              : 0=assignment option / 1=non-assignment option  (integer)
+#
+# Description:
+#   Processes __comp_word. If __comp_word is an assignment option than return the possible
+#   assignment values list (either via __reply_reference, or stdout, if __reply_reference
+#   is not specified). The function returns 0 in this instance.
+#   Otherwise return 1, and don't set __reply_reference.
+#   If completion value (__comp_value) parameter is set, then this is used to specify a partial completion
+#   value for the current assignment option. Use __comp_value to cull any option values, in the (possible)
+#   option value list, that do not match.
+#
+function convert_assignment_option()
+{
+	(((2 <= $#) && ($# <= 3))) || return 1
+
+	local	__comp_word="${1}" __comp_value="${2}" __reply_reference="${3}" \
+		__reply_value
+
+
+	case "${__comp_word%=}" in
+		--wine-staging)
+			__reply_value="${BOOLEAN_OPTION_LIST}"
+			;;
+		--wine-branch)
+			if [[ -z "${WINE_BRANCH_LIST}" ]]; then
+				WINE_BRANCH_LIST="$( _git_get_branch_list "${WINE_GIT_ROOT}" | "${AWK}" "${awk_block_split}" )"
+			fi
+			[[ -z "${WINE_BRANCH_LIST}" ]] && __reply_value="origin/master origin/oldstable origin/stable"
+			[[ -z "${WINE_BRANCH_LIST}" ]] || __reply_value="${WINE_BRANCH_LIST}"
+			;;
+		--wine-commit)
+			if [[ -z "${WINE_COMMIT_LIST}" ]]; then
+				WINE_COMMIT_LIST="$( _git_get_commit_list "${WINE_GIT_ROOT}" "origin/master" | "${AWK}" "${awk_block_split}" )"
+			fi
+			__reply_value="${WINE_COMMIT_LIST}"
+			;;
+		--wine-version)
+			if [[ -z "${WINE_VERSIONS_LIST}" ]]; then
+				WINE_VERSIONS_LIST="$( _git_get_tag_list "${WINE_GIT_ROOT}" "origin/master" "${WINE_PREFIX}" | "${AWK}" "${awk_block_split}" )"
+			fi
+			__reply_value="${WINE_VERSIONS_LIST}"
+			;;
+		--wine-staging-branch)
+			if [[ -z "${WINE_STAGING_BRANCH_LIST}" ]]; then
+				WINE_STAGING_BRANCH_LIST="$( _git_get_branch_list "${WINE_STAGING_GIT_ROOT}" | "${AWK}" "${awk_block_split}" )"
+			fi
+			[[ -z "${WINE_STAGING_BRANCH_LIST}" ]] && __reply_value="origin/master"
+			[[ -z "${WINE_STAGING_BRANCH_LIST}" ]] || __reply_value="${WINE_STAGING_BRANCH_LIST}"
+			;;
+		--wine-staging-commit)
+			if [[ -z "${WINE_STAGING_COMMIT_LIST}" ]]; then
+				WINE_STAGING_COMMIT_LIST="$( _git_get_commit_list "${WINE_STAGING_GIT_ROOT}" "origin/master" | "${AWK}" "${awk_block_split}" )"
+			fi
+			__reply_value="${WINE_STAGING_COMMIT_LIST}";;
+		--wine-staging-version)
+			if [[ -z "${WINE_STAGING_VERSIONS_LIST}" ]]; then
+				WINE_STAGING_VERSIONS_LIST="$( _git_get_tag_list "${WINE_STAGING_GIT_ROOT}" "origin/master" "${WINE_STAGING_PREFIX}" | "${AWK}" "${awk_block_split}" )"
+			fi
+			__reply_value="${WINE_STAGING_VERSIONS_LIST}"
+			;;
+		--color|--colour|--logging)
+			__reply_value="${BOOLEAN_OPTION_LIST}"
+			;;
+		--log-compression)
+			__reply_value="${LOG_COMPRESSORS_LIST}"
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	if [[ -n "${__comp_value}" ]]; then
+		# shellcheck disable=SC2016
+		__reply_value="$(
+			echo "${__reply_value}" \
+				| "${AWK}" -vcomp_value="${__comp_value}" \
+					"${awk_block_drop_nonmatched_assignment_values}"
+		)"
+	fi
+
+	if [[ -z "${__reply_reference}" ]]; then
+		echo "${__reply_value}"
+		return 0
+	elif [[ "${__reply_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		declare -n __reply="${__reply_reference}"
+		# shellcheck disable=SC2034
+		__reply="${__reply_value}"
+		return 0
+	else
+		return 1
+	fi
+}
+
+
+# _list_match_item()
+#
+# Parameters:
+#     1      >   search_text                  :  list item to search for  (string)
+#     2[-N]  >   list_item(1)[-list_item(N)]  :  items to match against   (string, list)
+#            <   return                       :  0=match / 1=no match     (integer)
+#
+# Description:
+#   Match list of items (list_item), on stdin, with search_text. With
+#   any match, return 0 (immediately). With no matches, return 1.
+#
+_list_match_item()
+{
+	(($#>=1)) || return 1
+	local search_text="${1}"
+
+	shift 1
+	for list_item; do
+		[[ "${search_text}" = "${list_item}" ]] && return 0
+	done
+	return 1
+}
+
+
+# function _cull_duplicates()
+#
+# Parameters:
+#     1 >  __cli_argument                : command line argument                 (string)
+#   [ 2<>  __parameter_array_reference   : option or command array to test       (string array, reference) ]
+#
+# Description:
+#   Tests whether the command line argument (__cli_argument) is in the supplied
+#   array (__parameter_array_reference) of options or commands. If there is a match
+#   then remove the matched value from the reference array. The culled array is
+#   generated from scratch, so it is contiguous / without "holes".
+#
+function _cull_duplicates()
+{
+	(($# == 2)) || return 1
+
+	local	__cli_argument="${1}" __parameter_array_reference="${2}" \
+			__culled_value=1 __parameter
+
+	if [[ ! "${__parameter_array_reference}" =~ ${VARIABLE_NAME_REGEXP} ]]; then
+		return 1
+	fi
+
+	declare -n parameter_array="${__parameter_array_reference}"
+	local -a __cli_argument_argument_array=() __culled_parameter_array=()
+
+	case "${__cli_argument}" in
+		# --patch-directory can be repeated (so ignore it).
+		--build-directory|--prefix-directory|--source-directory|--log-directory)
+			__cli_argument_argument_array=( "${__cli_argument}..." )
+			;;
+		--wine-branch=*|--wine-commit=*|--wine-version=*|--wine-staging-branch=*|--wine-staging-commit=*|--wine-staging-version=*)
+			__cli_argument_argument_array=(
+				"--wine-branch=" "--wine-commit=" "--wine-version="
+				"--wine-staging-branch=" "--wine-staging-commit=" "--wine-staging-version="
+			)
+			;;
+		--wine-staging=[yY][eE][sS]|--wine-staging=[yY]|--wine-staging=[tT][rR][uU][eE]|--wine-staging=[tT]|--wine-staging=1)
+			__cli_argument_argument_array=(
+				"--wine-branch=" "--wine-commit=" "--wine-version=" "--wine-staging="
+			)
+			;;
+		--wine-staging=[nN][oO]|--wine-staging=[nN]|--wine-staging=[fF][aA][lL][sS][eE]|--wine-staging=[fF]|--wine-staging=0)
+			__cli_argument_argument_array=(
+				"--wine-staging-branch=" "--wine-staging-commit=" "--wine-staging-version=" "--wine-staging="
+			)
+			;;
+		--color=*|--colour=*)
+			__cli_argument_argument_array=( "--colour=" "--color=" )
+			;;
+		*)
+			__cli_argument_argument_array=( "${__cli_argument}" )
+			;;
+	esac
+
+	for __parameter in "${parameter_array[@]}"; do
+		# shellcheck disable=SC2068
+		for __cli_argument in ${__cli_argument_argument_array[@]}; do
+			if [[ "${__parameter}" == "${__cli_argument}" ]]; then
+				__culled_value=0
+				continue 2
+			fi
+		done
+
+		__culled_parameter_array+=( "${__parameter}" )
+	done
+	parameter_array=( "${__culled_parameter_array[@]}" )
+
+	return $((__culled_value))
+}
+
+
+##### Define main BASH completion function #####
+
+
+_build_multilib_wine()
+{
+	local cur directory_option full_term i prev reply
+	local -a temp_build_options  temp_global_options \
+			temp_build_commands temp_general_commands temp_schroot_commands
+
+	_init_completion || return
+
+	# When an option or verb is specified then disable from being repeated via tab expansion.
+	# For options also handle any duplicate and inverse/negated variants.
+	# NB we don't touch the global OPTS / ALL_VERBS variables. If the user starts a new line
+	# or deletes a term, then we must be able to revert back to the default verbs / options.
+	temp_build_options=( "${BUILD_OPTIONS[@]}" )
+	temp_global_options=( "${GLOBAL_OPTIONS[@]}" )
+
+	temp_build_commands=( "${BUILD_COMMANDS[@]}" )
+	temp_general_commands=( "${GENERAL_COMMANDS[@]}" )
+	temp_schroot_commands=( "${SCHROOT_COMMANDS[@]}" )
+
+	for ((i=1 ; i<COMP_CWORD-1 ; ++i)); do
+		full_term="${cur}"
+
+		if ((i<COMP_CWORD-2)) && [[ "${COMP_WORDS[i+1]}" == "=" ]]; then
+			full_term="${COMP_WORDS[i]}${COMP_WORDS[i+1]}"
+		fi
+
+		_cull_duplicates "${full_term}" "temp_global_options"
+
+		if _cull_duplicates "${full_term}" "temp_build_options"; then
+			temp_general_commands=()
+			temp_schroot_commands=()
+		fi
+
+		if _cull_duplicates "${full_term}" "temp_build_commands"; then
+			if [[ "${full_term}" == "build"* ]]; then
+				temp_build_commands=()
+			else
+				_cull_duplicates "build" "temp_build_commands"
+			fi
+
+			temp_general_commands=()
+			temp_schroot_commands=()
+		elif _cull_duplicates "${full_term}" "temp_general_commands"; then
+			temp_general_commands=()
+			temp_build_commands=()
+			temp_schroot_commands=()
+		elif _cull_duplicates "${full_term}" "temp_schroot_commands"; then
+			temp_build_commands=()
+			temp_general_commands=()
+			temp_schroot_commands=()
+		fi
+	done
+
+	# shellcheck disable=SC2068
+	for directory_option in ${temp_build_options[@]} ${temp_global_options[@]}; do
+		[[ "${directory_option}" == "${directory_option%...}" ]] && continue
+
+		if [[ "${prev}=" =~ ${directory_option%...} ]]; then
+			cur="${cur:=${HOME}}"
+			_filedir -d
+			return
+		fi
+	done
+
+	# Disable tab expansion when a terminating option or command has been typed...
+	# shellcheck disable=SC2145
+	if _list_match_item "${prev}" "${temp_general_commands[@]} ${temp_schroot_commands[@]}"; then
+		# shellcheck disable=SC2207
+		COMPREPLY=( $(compgen -W "" -- "${cur}") )
+		return 0
+	fi
+
+	# Parse assignment options, of the form: '--wine-staging='
+	for ((i=2 ; i<=COMP_CWORD ; ++i)); do
+		if ((i>=3)) && [[ "${COMP_WORDS[i-1]}" == "=" ]]; then
+			if _cull_duplicates "${COMP_WORDS[i-2]}${COMP_WORDS[i-1]}${COMP_WORDS[i]}" "temp_build_options"; then
+				temp_general_commands=()
+				temp_schroot_commands=()
+			fi
+		fi
+		if ((i<COMP_CWORD-1)) || [[ "${COMP_WORDS[i]}" != "=" ]]; then
+			continue
+		fi
+
+		((i == COMP_CWORD))	&& assignment_value=""
+		((i  < COMP_CWORD))	&& assignment_value="${COMP_WORDS[i+1]}"
+		if ! convert_assignment_option "${COMP_WORDS[i-1]}" "${assignment_value}" "reply"; then
+			# shellcheck disable=SC2124
+			reply="${temp_global_options[@]} ${temp_build_options[@]}"
+		fi
+
+		# shellcheck disable=SC2207
+		COMPREPLY=( $(compgen -W "${reply}" -- "${COMP_WORDS[i]%=}") )
+		# Suppress starting a new argument when have an assignment option or command...
+		if [[ "${COMPREPLY[0]%=}=" = "${COMPREPLY[0]}" ]]; then
+			compopt -o nospace
+		fi
+		return 0
+	done
+
+	# Parse general (non-assignment) verbs and options.
+	# Only display all available long options when the end user tab completes one (or more) hyphen characters.
+	# Reduces end-user overload!
+	# Remove path suffix (...) from any options, with a (following) directory component
+	case "${COMP_WORDS[COMP_CWORD]}" in
+		-*)
+			# shellcheck disable=SC2086
+			reply="${temp_build_options[*]/%.../} ${temp_global_options[*]/%.../}"
+			;;
+		*)
+			# shellcheck disable=SC2086
+			reply="${temp_build_commands[*]} ${temp_general_commands[*]} ${temp_schroot_commands[*]}"
+			;;
+	esac
+
+	# shellcheck disable=SC2207
+	COMPREPLY=( $(compgen -W "${reply}" -- "${cur}") )
+	# Suppress starting a new argument when have an assignment option or command...
+	if [[ "${COMPREPLY[0]%=}=" = "${COMPREPLY[0]}" ]]; then
+		compopt -o nospace
+	fi
+	return 0
+}
+
+# We've found no build_multilib_wine script in the end-user's PATH, so give up now ...
+[[ -z "${BUILD_MULTILIB_WINE_PATH}" || ! -f "${BUILD_MULTILIB_WINE_PATH}" ]] && return 1
+
+# We've tried real hard, but the end-user doesn't appear to have a working awk implementation...
+[[ -z "${AWK}" ]] && return 1
+
+# Setup various Global variables (when this script is initially source'd)...
+BUILD_COMMANDS=( "build-all" "src-fetch" "src-prepare" "src-configure" "src-compile" "src-install" )
+
+GENERAL_COMMANDS=( "generate-conf" "help" "version" )
+
+SCHROOT_COMMANDS=( "setup-chroot" "upgrade-chroot" )
+
+BUILD_OPTIONS=(
+	"--build-directory..."
+	"--patch-directory..."
+	"--prefix-directory..."
+	"--source-directory..."
+	"--wine-staging="
+	"--wine-branch="
+	"--wine-commit="
+	"--wine-version="
+	"--wine-staging-branch="
+	"--wine-staging-commit="
+	"--wine-staging-version="
+)
+
+GLOBAL_OPTIONS=(
+	"--color="
+	"--colour="
+	"--log-directory..."
+	"--logging="
+	"--log-compression="
+)
+
+
+parse_script_read_global_options
+
+[[ -d "${SOURCE_ROOT%/}/wine/.git" ]]			&& WINE_GIT_ROOT="${SOURCE_ROOT%/}/wine"
+[[ -d "${SOURCE_ROOT%/}/wine-staging/.git" ]]	&& WINE_STAGING_GIT_ROOT="${SOURCE_ROOT%/}/wine-staging"
+
+parse_boolean_option "${WINE_STAGING}" "WINE_STAGING"
+
+complete -F _build_multilib_wine build_multilib_wine
