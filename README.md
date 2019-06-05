@@ -5,12 +5,12 @@
 
 Download and install the latest release version tarball:
 ```
-    cd ~/Downloads \
-    && wget 'https://github.com/bobwya/build-multilib-wine/releases/latest' -O 'build-multilib-wine.release.json' \
-    && export release_tag \
-    && release_tag="$(sed -n '\@<a href=\"/bobwya/build-multilib-wine/releases/tag/@{s@^.*<a href=\".*releases/tag/\(.*\)\">.*$@\1@g;p}' 'build-multilib-wine.release.json')" \
-    && { [[ -z "${release_tag}" ]] && release_tag="master"; } \
-    && wget "https://github.com//bobwya/build-multilib-wine/archive/${release_tag}.tar.gz" -O "build-multilib-wine-${release_tag}.tar.gz" \
+    export release_tag
+    cd ~/Downloads
+    wget 'https://github.com/bobwya/build-multilib-wine/releases/latest' -O 'build-multilib-wine.release.json'
+    release_tag="$(sed -n '\@<a href=\"/bobwya/build-multilib-wine/releases/tag/@{s@^.*<a href=\".*releases/tag/\(.*\)\">.*$@\1@g;p}' 'build-multilib-wine.release.json')"
+    [[ -z "${release_tag}" ]] && release_tag="master"
+    wget "https://github.com//bobwya/build-multilib-wine/archive/${release_tag}.tar.gz" -O "build-multilib-wine-${release_tag}.tar.gz" \
     && tar xvfa "build-multilib-wine-${release_tag}.tar.gz" \
     && cd "build-multilib-wine-${release_tag}" \
     && sudo make install
