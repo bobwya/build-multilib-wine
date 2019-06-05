@@ -36,12 +36,11 @@ The script has a detailed help page with the all the supported options:
     build_multilib_wine help
 ```
 
-Also see the **build_multilib_wine** man page:
+Also see: [**build_multilib_wine**(1)](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine-(1)-:-man-page)  and [**build_multilib_wine.conf(5)**](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine.conf(5)-:-man-page) man pages.
+
+These man pages can also be viewed off-line using the commands (respectively):
 ```
     man build_multilib_wine # (1)
-```
-and the **build_multilib_wine.conf** configuration file man page:
-```
     man build_multilib_wine.conf # (5)
 ```
 
@@ -138,11 +137,12 @@ users=robert
 preserve-environment=true
 ```
 
-Logging is done with a separate logging thread... This was done so a FIFO pipe could be utilised. This proved to be simplier and more reliable, than say using TTY redirection, etc. Commands are simply grouped into blocks, with all output redirected to the input of the FIFO pipe. The actual logging thread reads the data coming out of the FIFO pipe output. This is always dumped to the standard console output stream (**stdout**) and (optionally) is written, uncompressed, to a log file. Log file compression is deferred to completion, of the current script operation, to support more advanced (non-streaming) compression techniques, like **lzma**. Deferred compression will always achieve better compression ratios (vs. streaming compression) anyway.
+Logging is done with a separate logging thread... This was done so a FIFO pipe could be utilised. This proved to be simplier and more reliable, than say using TTY redirection, etc. Commands are simply grouped into blocks, with all output redirected to the input of the FIFO pipe. The actual logging thread reads the data coming out of the FIFO pipe output. This is always dumped to the standard console output stream (**stdout**) and (optionally) is written, uncompressed, to a log file. Log file compression is deferred to completion, of the current script operation, to support more advanced (non-streaming) compression techniques, like **lzma**. Generally using deferred compression will always achieve better compression ratios vs. streaming compression, when more advanced compression techniques are used.
 
 The script was originally intended to use **sudo** to gain **root** privileges, as required. However there are a number of flaws, in the way **sudo** works, that made this very difficult. The most significant problem is that subshells, created with **sudo**, do not inherit any exported functions and variables, from the parent shell. Working around this limitation (alone) would have been (potentially) quite messy. So the final version of the script uses **su** to gain **root** privileges, as required. Unfortunately, this does require that Ubuntu user's have a **root** password set.
 
 ###  Issues (bugs)
 
 If you have an issue this script then please use the repository Github issue tracker: [GitHub: bobwya / build-multilib-wine Issues](https://github.com/bobwya/build-multilib-wine/issues)
+
 Where appropriate, please attach a script log file (see above: **Logging** section).
