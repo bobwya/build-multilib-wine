@@ -45,6 +45,6 @@ install:
 	$(INSTALL) -d $(DESTDIR)$(PREFIX)/share/man/man1
 	$(INSTALL_DATA) man/build_multilib_wine.1 $(DESTDIR)$(PREFIX)/share/man/man1/build_multilib_wine.1
 	$(INSTALL) -d $(DESTDIR)$(PREFIX)/share/man/man5
-	$(INSTALL_DATA) man/build_multilib_wine.5 $(DESTDIR)$(PREFIX)/share/man/man5/build_multilib_wine.5
+	$(INSTALL_DATA) man/build_multilib_wine.conf.5 $(DESTDIR)$(PREFIX)/share/man/man5/build_multilib_wine.conf.5
 	$(INSTALL) -d $(DESTDIR)$(PREFIX)/share/bash-completion/completions
 	$(INSTALL_DATA) src/build_multilib_wine.bash-completion $(DESTDIR)$(PREFIX)/share/bash-completion/completions/build_multilib_wine
