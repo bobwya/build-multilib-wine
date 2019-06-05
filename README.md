@@ -3,15 +3,6 @@
 
 ###  Installing
 
-Download and install the latest git master tarball:
-```
-    cd ~/Downloads \
-    && wget 'https://github.com//bobwya/build-multilib-wine/archive/master.tar.gz' -O 'build-multilib-wine-master.tar.gz' \
-    && tar xvfa 'build-multilib-wine-master.tar.gz' \
-    && cd 'build-multilib-wine-master' \
-    && sudo make install
-```
-
 Download and install the latest release version tarball:
 ```
     cd ~/Downloads \
@@ -36,9 +27,11 @@ The script has a detailed help page with the all the supported options:
     build_multilib_wine help
 ```
 
-Also see: [**build_multilib_wine**(1)](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine-(1)-:-man-page)  and [**build_multilib_wine.conf(5)**](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine.conf(5)-:-man-page) man pages.
+Also see the online man pages:
+ * [**build_multilib_wine**(1)](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine-(1)-:-man-page)
+ * [**build_multilib_wine.conf(5)**](https://github.com/bobwya/build-multilib-wine/wiki/build_multilib_wine.conf(5)-:-man-page) 
 
-These man pages can also be viewed off-line using the commands (respectively):
+These man pages can also be viewed offline, using the commands (respectively):
 ```
     man build_multilib_wine # (1)
     man build_multilib_wine.conf # (5)
@@ -49,7 +42,7 @@ A default / stock configuration file can be created with:
     build_multilib_wine.sh generate-conf
 ```
 
-*It is recommended new users do this first*. As the configuration file will show what common script options will need to be specified.
+*It is recommended new users do this first*. As the configuration file will show what common script options will/may need to be specified.
 This file can then be edited to suit the users requirements.
 
 This configuration file will be created by default as:
@@ -85,7 +78,7 @@ Once you've managed to compile your custom version of Wine, it will (by default)
 ```
 To run your custom Wine version use the **full path** for all the executable, e.g.:
 ```
-    ~/usr/bin/wine ...
+    ~/usr/bin/wine start /unix ~/Downloads/foobar2000_v1.4.exe
     ~/usr/bin/winecfg
 ```
 
@@ -143,6 +136,8 @@ The script was originally intended to use **sudo** to gain **root** privileges, 
 
 ###  Issues (bugs)
 
-If you have an issue this script then please use the repository Github issue tracker: [GitHub: bobwya / build-multilib-wine Issues](https://github.com/bobwya/build-multilib-wine/issues)
+If you have an issue this script then please use the repository Github issue tracker:
 
-Where appropriate, please attach a script log file (see above: **Logging** section).
+[GitHub: bobwya / build-multilib-wine Issues](https://github.com/bobwya/build-multilib-wine/issues)
+
+Where appropriate, please attach a log file (see above: **Logging** section).
