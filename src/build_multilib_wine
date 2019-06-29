@@ -2474,7 +2474,7 @@ function screen_conf_file()
 "LOG_(COMPRESSION|DIRECTORY)|PREFIX|THREADS|"\
 "WINE_ADDON_(GLOBAL|RELPATH)|"\
 "WINE_(CFLAGS|CONFIGURATION|MAKE_OPTIONS|VERSION|BRANCH|COMMIT)|"\
-"WINE_STAGING_(BRANCH|COMMIT|EXCLUDE)|"\
+"WINE_STAGING_(BRANCH|COMMIT|EXCLUDE|VERSION)|"\
 "WORKING_PATCHES_DIRECTORY)$"
 			regex_array_string_variables="^(USER_PATCH_DIRECTORIES)$"
 			regex_string_value="^\"[^\"]*\"$"
@@ -2973,7 +2973,7 @@ function execute_commands()
 # WINE_STAGING=${wine_staging_enabled} # default
 #
 # Wine version to build.
-# WINE_VERSION="4.7"
+# WINE_VERSION="4.11"
 #
 # Git branch of Wine to build (WINE_STAGING=no).
 # WINE_BRANCH="refs/heads/master"
@@ -2988,7 +2988,7 @@ function execute_commands()
 # WINE_STAGING_COMMIT=""
 #
 # Wine-Staging version to build.
-# WINE_STAGING_VERSION="4.7"
+# WINE_STAGING_VERSION="4.11"
 #
 # Logging
 #
