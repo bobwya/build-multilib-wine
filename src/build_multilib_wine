@@ -492,6 +492,13 @@ function set_lsb_codename()
 			LSB_CODENAME="stretch";;
 		betsy)
 			LSB_CODENAME="jessie";;
+		# elementary OS (newer first)
+		juno)
+			LSB_CODENAME="bionic";;
+		loki)
+			LSB_CODENAME="xenial";;
+		freya)
+			LSB_CODENAME="trusty";;
 	esac
 }
 
