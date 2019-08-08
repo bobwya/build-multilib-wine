@@ -568,7 +568,10 @@ function check_package_dependencies()
 	)
 	local executable
 
-	[[ "${LSB_DISTRIBUTION_ID}" == "debian" ]] && array_executables+=("netselect-apt")
+	if [[ "${LSB_DISTRIBUTION_ID}" == "debian" ]]; then
+		array_executables+=("netselect-apt")
+		export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+	fi
 
 	for executable in "${array_executables[@]}"; do
 		command -v "${executable}" &>/dev/null &&	continue
