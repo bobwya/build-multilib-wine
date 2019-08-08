@@ -39,7 +39,7 @@ These man pages can also be viewed offline, using the commands (respectively):
 
 A default / stock configuration file can be created with:
 ```
-    build_multilib_wine.sh generate-conf
+    build_multilib_wine generate-conf
 ```
 
 *It is recommended new users do this first*. As the configuration file will show what common script options will/may need to be specified.
