@@ -574,7 +574,10 @@ function check_package_dependencies()
 	fi
 
 	for executable in "${array_executables[@]}"; do
-		command -v "${executable}" &>/dev/null &&	continue
+		if [[ $(dpkg-query -W "${executable}" 2>&1) =~ .*no[[:space:]]packages[[:space:]]found.* ]] || \
+		   [ ! `command -v "${executable}" &>/dev/null` ]; then
+			continue
+		fi
 
 		case "${executable}" in
 			md5sum|mkfifo)
