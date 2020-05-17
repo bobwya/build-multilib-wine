@@ -513,7 +513,7 @@ function set_lsb_codename()
 function set_lsb_distribution_id()
 {
 	case "${LSB_CODENAME}" in
-		trusty|xenial|bionic|cosmic|disco|eoan)
+		trusty|xenial|bionic|cosmic|disco|eoan|bionic|focal)
 			LSB_DISTRIBUTION_ID="ubuntu"
 			;;
 		*)
@@ -1647,9 +1647,9 @@ get_optimum_repository_mirror()
 	if [[ "${LSB_DISTRIBUTION_ID}" == "debian" ]]; then
 		__test_file_relpath="dists/${LSB_CODENAME}/Release"
 		__repository_mirror_list="$(
-			netselect-apt "${LSB_CODENAME}" 2>/dev/null \
+			netselect-apt 2>/dev/null \
 				| gawk '{ if ($1~"^(https{0,1}|ftp):") { print $1 } }'
-		)"
+		)" # fix: net-select-apt new version / get mirrors always on any distro
 	else
 		__test_file_relpath="ubuntu/dists/${LSB_CODENAME}/Release"
 		__repository_mirror_list="$(wget -qO - "${__ubuntu_mirror_list}")"
@@ -1672,11 +1672,11 @@ get_optimum_repository_mirror()
 	if [[ -z "${__best_repository_mirror}" ]]; then
 		for __repository_mirror in "${__repository_mirror_array[@]}"; do
 			: $((++__i))
-			rm -f "${__temp_file}" &>/dev/null
-			if __download_time="$(
-				env time -f '%e' wget -t 1 -T 4 -qO "${__temp_file}" "${__repository_mirror}/${__test_file_relpath}" 2>&1 \
-					| gawk '{ if ($0 ~ "^[.[:digit:]]+$") { printf("%.0f\n", ($0*1000)) } else { exit 1 } }'
-			)"; then
+			rm -f "${__temp_file}" &>/dev/null	
+		    __basetime=$(date +%s%N) 
+            wget -t 1 -T 4 -qO "./tmp" "${__repository_mirror}${__test_file_relpath}" 2>&1 
+            if __download_time=$( (echo "scale=3;($(date +%s%N) - ${__basetime})/(1*10^9)" | bc) | gawk '{ if ($0 ~ "^[.[:digit:]]+$") { printf("%.0f\n", ($0*1000)) } else { exit 1 } }'
+			); then   # fix, more compatible timing method.
 				printf "[%02d] %s mirror: %s (%d ms)\\n" \
 						"$((__i))" "${LSB_DISTRIBUTION_ID^}" "${__repository_mirror}" "$((__download_time))"
 			else
