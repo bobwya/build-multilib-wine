@@ -1741,7 +1741,7 @@ function fetch_wine_addon()
 		gecko)
 			arch_array+=( "32" "64" )
 			no_arch_suffix=0
-			separator="_"
+			separator="-"
 			;;
 		mono)
 			arch_array+=( "32" )
@@ -2989,13 +2989,13 @@ function execute_commands()
 # WINE_VERSION="4.11"
 #
 # Git branch of Wine to build (WINE_STAGING=no).
-# WINE_BRANCH="refs/heads/master"
+# WINE_BRANCH="origin/master"
 #
 # Git commit (SHA-1 hash) of Wine to build (WINE_STAGING=no).
 # WINE_COMMIT=""
 #
 # Git branch of Wine-Staging to build (WINE_STAGING=yes).
-# WINE_STAGING_BRANCH="refs/heads/master"
+# WINE_STAGING_BRANCH="origin/master"
 #
 # Git commit (SHA-1 hash) of Wine-Staging to build (WINE_STAGING=yes).
 # WINE_STAGING_COMMIT=""
