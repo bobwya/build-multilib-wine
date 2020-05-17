@@ -1745,7 +1745,7 @@ function fetch_wine_addon()
 			;;
 		mono)
 			arch_array+=( "32" )
-			no_arch_suffix=1
+			no_arch_suffix=0
 			separator="-"
 			;;
 		*)
