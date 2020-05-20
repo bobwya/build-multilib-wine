@@ -800,9 +800,9 @@ function display_completion_message()
 #
 function fetch_and_extract_tarball()
 {
-	(( ($# == 2) || ($# == 3) )) || die "Invalid parameter count: ${#} (2-3)"
+	(( ($# == 2) || ($# == 3) || ($# == 5) )) || die "Invalid parameter count: ${#} (2-3)"
 	local __directory="${1:-.}" __download_uri="${2}" __tarball
-	if (($# == 3)); then
+	if (($# >= 3)); then
 		__tarball="${3}"
 	else
 		__tarball="$(basename "${__download_uri}")"
@@ -811,6 +811,9 @@ function fetch_and_extract_tarball()
 	wget -O "${__tarball}" "${__download_uri}" || die "wget \"${__download_uri}\" failed"
 	tar xvfa "${__tarball}" || die "tar e(x)tract failed"
 	rm "${__tarball}" || die "rm failed"
+    if (($# == 5)); then
+        rsync -a $4/* ${__directory}/$5 || die "copy into parent failed"
+    fi
 	[[ "${__directory}" != "." ]] && popd_wrapper
 }
 
@@ -860,7 +863,7 @@ clean_source_directories()
 	done
 }
 
-# function fetch_and_extract_tarball()
+# function clean_build_directories()
 #
 # Parameters:
 #     1[-N]>  directories_array : build directories to wipe  (string array)
@@ -2140,7 +2143,7 @@ function src_fetch()
 
 	clean_build_directories "${BUILD_ROOT}/wine64" "${BUILD_ROOT}/wine32" "${BUILD_ROOT}/wine32_tools"
 	pushd_wrapper "${SOURCE_ROOT}"
-	fetch_and_extract_tarball . "${GENTOO_WINE_EBUILD_COMMON_PACKAGE_URI}" "${GENTOO_WINE_EBUILD_COMMON_PACKAGE}"
+	fetch_and_extract_tarball . "${GENTOO_WINE_EBUILD_PACKAGE_URI}" "${GENTOO_WINE_EBUILD_PACKAGE}.xz" "${GENTOO_WINE_EBUILD_PACKAGE}" "${WINE_EBUILD_COMMON}"      # fix: copy-out function added to fetch_and_extact_tarball.
 
 	# Fetch Wine-Staging Git Source (if required).
 	# Checkout desired Wine version in Wine-Staging Git tree (clean and update first!!)
@@ -2232,18 +2235,15 @@ function src_prepare()
 
 	# (1) Apply base (bundled) & working patches. Call 2 helper functions ...
 	local -a	array_patch_files=(
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.13-fix_build_with_newer_pcap.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
+        "${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.0-multislot-apploader.patch"
+        "${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-4.7-multilib-portage.patch"
+        "${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-5.0-winegcc.patch"
 	)
+
+    # UPDATE: Current gentoo ebuild has no bin patches, will leave functionality
+    #         in place for any futures.
 	# shellcheck disable=SC2034
 	local -a	array_binpatch_files=(
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-implement_minimum_em_size_required_by_opentype_1.8.2.patch"
 	)
 
 	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
@@ -3241,7 +3241,7 @@ function main()
 		printf "Read global configuration file: \"%s\"...\\n" "${TTYBLUE_BOLD}${SCRIPT_CONFIG}${TTYRESET}"
 	fi
 	# Global name constants
-	export 	GENTOO_WINE_EBUILD_COMMON_PACKAGE="gentoo-wine-ebuild-common"
+	export 	GENTOO_WINE_EBUILD_PACKAGE="gentoo-wine-patches"
 
 	# Global versioning defaults
 	parse_boolean_option "${WINE_STAGING}" "WINE_STAGING"
@@ -3261,16 +3261,16 @@ function main()
 	export	WINE_STAGING_PREFIX="v"
 	export	WINE_STAGING_SUFFIX="-unofficial"
 	export	WINE_PREFIX="wine-"
-	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20190428"
+	export	GENTOO_WINE_EBUILD_PACKAGE_VERSION="20191222"
 
 	# Global URI constants
 	export	WINE_STAGING_GIT_URI="https://github.com/wine-staging/wine-staging.git"
 	export	WINE_GIT_URI="git://source.winehq.org/git/wine.git"
 	export	WINE_ADDON_URI="http://dl.winehq.org/wine/"
-	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_URI="https://github.com/bobwya/${GENTOO_WINE_EBUILD_COMMON_PACKAGE}/archive/${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}.tar.gz"
+	export	GENTOO_WINE_EBUILD_PACKAGE_URI="https://dev.gentoo.org/~sarnex/distfiles/wine/${GENTOO_WINE_EBUILD_PACKAGE}-${GENTOO_WINE_EBUILD_PACKAGE_VERSION}.tar.xz"
 	export	WINE_STAGING_BINPATCH_URI="https://raw.githubusercontent.com/wine-staging/wine-staging/master/patches/gitapply.sh"
 	export	WINE_STAGING_COMMIT_c48811407e3_URI="https://github.com/wine-staging/wine-staging/commit/c48811407e3c9cb2d6a448d6664f89bacd9cc36f.patch"
-	export	WINE_EBUILD_COMMON="${GENTOO_WINE_EBUILD_COMMON_PACKAGE}-${GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION}"
+	export	WINE_EBUILD_COMMON="${GENTOO_WINE_EBUILD_PACKAGE}-${GENTOO_WINE_EBUILD_PACKAGE_VERSION}"
 
 	if ((WINE_STAGING)); then
 		set_wine_staging_git_tag 0
