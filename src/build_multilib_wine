@@ -2186,8 +2186,7 @@ function src_fetch()
 #
 #   (1) Generate a list of the current set of Gentoo patches.
 #       These patches are used to fix compilation issues, with earlier
-#       versions of Wine. There is a custom patch, to improve
-#       the appearance of the About tab in winecfg.
+#       versions of Wine. 
 #       Additionally there is a binary patch, used to fix
 #       font file issues, related to a previous freetype update.
 #       The sets of patches (binary and text) is filtered to remove any
@@ -2234,7 +2233,6 @@ function src_prepare()
 	# (1) Apply base (bundled) & working patches. Call 2 helper functions ...
 	local -a	array_patch_files=(
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8_winecfg_detailed_version.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
