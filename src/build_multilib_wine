@@ -481,7 +481,9 @@ function set_lsb_codename()
 
 	case "${LSB_CODENAME}" in
 		# Linux Mint Main Edition (newer first)
-		tara|tessa)
+		ulyana)
+			LSB_CODENAME="focal";;
+		tara|tessa|tina|tricia)
 			LSB_CODENAME="bionic";;
 		sylvia|sonya|serena|sarah)
 			LSB_CODENAME="xenial";;
@@ -513,7 +515,7 @@ function set_lsb_codename()
 function set_lsb_distribution_id()
 {
 	case "${LSB_CODENAME}" in
-		trusty|xenial|bionic|cosmic|disco|eoan)
+		trusty|xenial|bionic|cosmic|disco|eoan|focal)
 			LSB_DISTRIBUTION_ID="ubuntu"
 			;;
 		*)
