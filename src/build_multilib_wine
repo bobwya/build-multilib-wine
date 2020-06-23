@@ -1730,21 +1730,22 @@ function fetch_wine_addon()
 	(($# == 2)) || die "Invalid parameter count: ${#} (2)"
 
 	local	wine_addon="${1}" wine_addon_version="${2}" \
-				arch arch_suffix no_arch_suffix separator="-" \
+				arch arch_suffix no_arch_suffix=0 separator="-" \
 				wine_addon_file wine_addon_uri wine_addon_version
 	local -a arch_array
 
 	case "${wine_addon}" in
 		gecko)
 			arch_array+=( "32" "64" )
-			no_arch_suffix=0
 			if [[ "${wine_addon_version}" =~ ^2.40|2.44|2.47$ ]]; then
 					separator="_"
 			fi
 			;;
 		mono)
 			arch_array+=( "32" )
-			no_arch_suffix=1
+			if [[ "${wine_addon_version}" == 4.* ]]; then
+					no_arch_suffix=1
+			fi
 			;;
 		*)
 			die "Parameter (1): invalid Wine addon specified: \"${wine_addon}\""
