@@ -1,5 +1,147 @@
 #!/bin/bash
 
+#### AWK Function Definitions Block ####
+
+# function process_literal_line
+# 
+# Description:
+#   awk function to fix the scope of a single compound literal.
+#   The argument may be a single line or a split line.
+#
+# shellcheck disable=SC2016
+_WINE_AWK_FUNCTION_PROCESS_LITERAL_LINE=\
+'function process_literal_line(line, offset, file_array,
+		line_prefix, value, value_start,
+		variable, variable_length, variable_start)
+{
+	match(file_array[line], idl_prefix_regex)
+	if (RSTART) line_prefix=substr(file_array[line],RSTART,RLENGTH)
+	match(file_array[line], define_regex)
+	if (RSTART) variable_start=RSTART+RLENGTH
+	match(file_array[line], define_variable_regex)
+	if (RSTART) variable_length=(RSTART+RLENGTH-variable_start)
+	match(file_array[line+offset], const_wchar_regex)
+	if (RSTART) value_start=RSTART+RLENGTH
+	if (!variable_start || !variable_length || !value_start)
+		return 0
+	variable=substr(file_array[line],variable_start,variable_length)
+	value=substr(file_array[line+offset],value_start)
+	if (offset) {
+		file_array[line]=sprintf("%sstatic const WCHAR %s[] =\\",
+			line_prefix, variable)
+		file_array[line+offset]=sprintf("%*s%s",
+			value_start, "", value)
+	}
+	else {
+		file_array[line]=sprintf("%sstatic const WCHAR %s[] = %s",
+			line_prefix, variable, value)
+	}
+	return 1
+}'
+
+# function is_broken_literal
+#
+# Description:
+#   awk function predicate to test if line1 or (if line2 is specified)
+#   line1+line2 contain a broken literal term.
+#
+# shellcheck disable=SC2016
+_WINE_AWK_FUNCTION_IS_BROKEN_LITERAL=\
+'function is_broken_literal(line1, line2,
+		is_broken)
+{
+	is_broken=line2 && (line1 ~ (split_first_line_regex)) && (line2 ~ ("^" const_wchar_regex))
+	is_broken=is_broken || ((line1 ~ header_line_regex) || (line1 ~ idl_line_regex))
+	return is_broken
+}'
+
+# function process_source_file
+#
+# Description:
+#   awk function to fix the scope of compound literals, in an array
+#   which holds the entire contents of a source file.
+#
+# shellcheck disable=SC1004,SC2016
+_WINE_AWK_FUNCTION_PROCESS_SOURCE_FILE=\
+'function process_source_file(filename, file_array,
+		changed_file, continuation_line, line, value_start)
+{
+	for (line=1 ; line<=file_array[0] ; ++line) {
+		if (!(line in file_array)) continue
+		if (is_broken_literal(file_array[line]))
+			continuation_line=process_literal_line(line, 0, file_array)
+		else if ((line<file_array[0]) && is_broken_literal(file_array[line], file_array[line+1]))
+			continuation_line=process_literal_line(line, 1, file_array)
+		if (!continuation_line) continue
+		changed_file=1
+		if (!sub(line_continuation_regex,"",file_array[line])) {
+			continuation_line=!(sub("[\"][)]$",";&",file_array[line])\
+				|| sub("[^;]$","&;",file_array[line]))
+		}
+	}
+	return changed_file
+}'
+
+# function update_source_file
+#
+# Description:
+#   awk function to rewrite the contents of a source file. Uses the argument
+#   which holds the updated contents of the target source file.
+#
+# shellcheck disable=SC2016
+_WINE_AWK_FUNCTION_UPDATE_SOURCE_FILE=\
+'function update_source_file(filename, file_array,
+		line)
+{
+	if (!file_array[0]) return
+	printf(" * Updating %04d %s ...\n", ++file_count, filename)
+	printf("") >filename
+	for (line=1 ; line<=file_array[0] ; ++line)
+		if (line in file_array) printf("%s\n", file_array[line]) >>filename
+	printf(" [ ok ]\n")
+}'
+
+# AWK BEGIN-END block
+#
+# Description:
+#   awk function to fix the scope of compound literal's.
+#   Transforms:
+#
+#     #define LDAP_CONTROL_VLVRESPONSE_W (const WCHAR []){'2','.','1','6','.', \
+#     '8','4','0','.','1','.','1','1','3','7','3','0','.','3','.','4','.','1','0',0}
+#
+#   into:
+#
+#     static const WCHAR LDAP_CONTROL_VLVRESPONSE_W[] = {'2','.','1','6','.',
+#     '8','4','0','.','1','.','1','1','3','7','3','0','.','3','.','4','.','1','0',0};
+#
+#   See: https://www.gnu.org/software/gcc/gcc-9/porting_to.html#complit
+#
+# shellcheck disable=SC2016
+_WINE_AWK_FIX_BLOCK_SCOPE_LITERALS=\
+'BEGIN{
+	const_wchar_regex="[[:blank:]][[:blank:]]*[(]const[[:space:]]*WCHAR[[:space:]]*[[][]][)]"
+	define_regex="#[[:space:]]?define[[:blank:]][[:blank:]]*"
+	define_variable_regex=(define_regex "[^[:blank:]]*")
+	header_line_regex=("^" define_variable_regex const_wchar_regex)
+	idl_prefix_regex=("^cpp_quote[(][\"]")
+	idl_line_regex=(idl_prefix_regex define_variable_regex const_wchar_regex)
+	line_continuation_regex="[[:blank:]]*[\\134\\134]$"
+	split_first_line_regex=("^" define_variable_regex line_continuation_regex)
+}
+{
+	if (filename != FILENAME) {
+		if (filename && process_source_file(filename, file_array))
+			update_source_file(filename, file_array)
+		filename=FILENAME
+		delete file_array
+	}
+	file_array[++file_array[0]]=$0
+}
+END{
+	if (filename && process_source_file(filename, file_array))
+		update_source_file(filename, file_array)
+}'
 
 #### General Helper Functions Definition Block ####
 
@@ -1517,6 +1659,88 @@ function wine_fix_winegcc_support() {
                 "${source_directory}/${source_files[1]}" || die "sed failed"
 }
 
+# function wine_fix_block_scope_compound_literals
+#
+# Parameters:
+#     1>  source_directory  : source directory, to which to apply fix  (string)
+#
+# Description:
+#   This function fixes issues with the lifetime of block scope compound literal's
+#   definitions, in Wine. This fix is applied to Wine versions <=4.10. Technically this
+#   issue only affects >=sys-devel/gcc-9.1.0, which checks for invalid literal scoping.
+#   This global fix is applied unequivocally, irrespective of the compiler version
+#   being used. Wine versions <=4.10, use invalid block scoping for a large number
+#   of compound literals (potentially leading to issues, with more aggressive compiler
+#   optimisations).
+#
+#   See: https://www.gnu.org/software/gcc/gcc-9/porting_to.html#complit
+#   See: https://bugzilla.suse.com/show_bug.cgi?id=1137071
+#
+wine_fix_block_scope_compound_literals() {
+	((1 == $#)) || die "Invalid parameter count: ${#} (1)"
+
+	local	source_directory="${1%/}"
+
+	if [[ ! -d "${source_directory}" ]]; then
+		printf "%sInvalid source directory%s: \"%s${source_directory}%s\"\\n" \
+				"${TTYRED_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
+		return 1
+	fi
+
+	printf "%sFixing compound literals (violating block scoping) ...%s\\n" \
+					"${TTYCYAN}" "${TTYRESET}"
+local -r awk_fix_block_scope_literals="${_WINE_AWK_FUNCTION_PROCESS_LITERAL_LINE} \
+${_WINE_AWK_FUNCTION_IS_BROKEN_LITERAL} \
+${_WINE_AWK_FUNCTION_PROCESS_SOURCE_FILE} \
+${_WINE_AWK_FUNCTION_UPDATE_SOURCE_FILE} \
+${_WINE_AWK_FIX_BLOCK_SCOPE_LITERALS}"
+
+	find "${source_directory}" -type f \( -name "*.h" -o -name "*.idl" \) -print0 \
+	| sort -z \
+	| xargs -0 awk "${awk_fix_block_scope_literals}" \
+		|| die "awk failed"
+}
+
+# function wine_winecfg_about_enhancement
+#
+# Parameters:
+#     1>  source_directory  : source directory, to which to apply fix  (string)
+#
+# Description:
+#   Improve formatting of Wine version, displayed on about tab, of the builtin winecfg utility.
+#
+wine_winecfg_about_enhancement() {
+	((1 == $#)) || die "Invalid parameter count: ${#} (1)"
+
+	local	source_directory="${1%/}"
+
+	if [[ ! -d "${source_directory}" ]]; then
+		printf "%sInvalid source directory%s: \"%s${source_directory}%s\"\\n" \
+				"${TTYRED_BOLD}" "${TTYGREEN_BOLD}" "${TTYCYAN_BOLD}" "${TTYRESET}"
+		return 1
+	fi
+
+	sed -i -e '/#include "config.h"/d' \
+		-e '/#include <windows.h>/ i #include "config.h"' \
+		-e '/[ ]-MulDiv([[:digit:]][[:digit:]], GetDeviceCaps(hDC, LOGPIXELSY), 72),$/{s/24,/16,/}' \
+		-e '/^[ ]*SetWindowTextA(hWnd, [_[:upper:]]*);$/{s/PACKAGE_NAME/PACKAGE_STRING/}' \
+		-e '/^[ ]*SetDlgItemTextA(hDlg, IDC_ABT_PANEL_TEXT, PACKAGE_VERSION);$/d' \
+		-e '/IDC_ABT_PANEL_TEXT/d' \
+		-e '/wine_get_version/d' \
+		-e '/SendDlgItemMessageW(hDlg, IDC_ABT_TITLE_TEXT, WM_SETFONT, (WPARAM)titleFont, TRUE);$/ a SetDlgItemTextA(hDlg, IDC_ABT_TITLE_TEXT, PACKAGE_STRING);' \
+		"${source_directory}/programs/winecfg/about.c" || die "sed failed"
+
+	sed -i -e '/IDC_ABT_PANEL_TEXT/d' \
+		"${source_directory}/programs/winecfg/resource.h" || die "sed failed"
+	sed -i -e '/#include "config.h"/d' \
+		-e '/#include "resource.h"/ i #include "config.h"' \
+		-e '/^[ ]*LTEXT[ ]*/{s/".*",IDC_ABT_TITLE_TEXT,105,30,55,30/"",IDC_ABT_TITLE_TEXT,100,30,200,20/}' \
+		-e '/^[ ]*LTEXT[ ]*"",IDC_ABT_PANEL_TEXT,160,43,140,8$/d' \
+		-e '/IDC_ABT_WEB_LINK,"SysLink", LWS_TRANSPARENT, /{s/105,53,106,8$/100,53,106,8/}' \
+		-e '/^[ ]*IDC_ABT_LICENSE_TEXT,/{s/105,64,145,66$/100,64,145,66/}' \
+		"${source_directory}/programs/winecfg/winecfg.rc" || die "sed failed"
+}
+
 # function get_wine_addon_version()
 #
 # Parameters:
@@ -2055,7 +2279,6 @@ EOF_SOURCES_LIST
 		"apt-get update -qq -y" \
 		"apt-get upgrade -qq -y" \
 		"rm -f \"/etc\"/{protocols,services,systemd/resolved.conf}" \
-		"apt-get install -qq -y software-properties-common" \
 		"dpkg-reconfigure --frontend=noninteractive locales" \
 		"update-locale LANG=${locale_lang}"
 	schroot_session_cleanup "${session}"
@@ -2092,6 +2315,7 @@ upgrade_chroot_build_env()
 		"apt-get install -qq -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev libsdl2-dev libvulkan-dev" \
 		"rm -f \"/etc\"/{protocols,services}" \
 		"dpkg --configure -a --force-confnew,confmiss" \
+		"rm -f \"/etc/protocols\"" \
 		"apt-get build-dep -qq -y -f wine-development" \
 		"rm -f \"/etc\"/{protocols,services}" \
 		"apt-get upgrade -qq -y"
@@ -2235,26 +2459,30 @@ function src_prepare()
 	# (1) Apply base (bundled) & working patches. Call 2 helper functions ...
 	local -a	array_patch_files=(
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8_winecfg_detailed_version.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.13-fix_build_with_newer_pcap.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-4.3-fix_build_with_newer_pcap.patch"
 	)
 	# shellcheck disable=SC2034
 	local -a	array_binpatch_files=(
 		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-implement_minimum_em_size_required_by_opentype_1.8.2.patch"
 	)
 
+	wine_fix_O3_compilation_support "${SOURCE_ROOT}/wine"
+	wine_fix_winegcc_support "${SOURCE_ROOT}/wine"
+
 	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
 	prune_commited_patches_from_arrays "${SOURCE_ROOT}/wine" array_patch_files array_binpatch_files
 	apply_patch_array "wine" array_patch_files[@]
 	apply_binpatch_array "wine" array_binpatch_files[@]
-	wine_fix_O3_compilation_support "${SOURCE_ROOT}/wine"
-	wine_fix_winegcc_support "${SOURCE_ROOT}/wine"
+
+	wine_winecfg_about_enhancement "${SOURCE_ROOT}/wine"
+	wine_fix_block_scope_compound_literals "${SOURCE_ROOT}/wine"
 
 	# (2) Apply Wine-Staging patchset ...
 	if ((WINE_STAGING)) && [[ -d "${SOURCE_ROOT}/wine-staging" ]]; then
@@ -3264,7 +3492,7 @@ function main()
 	export	WINE_STAGING_PREFIX="v"
 	export	WINE_STAGING_SUFFIX="-unofficial"
 	export	WINE_PREFIX="wine-"
-	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20190428"
+	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20200605"
 
 	# Global URI constants
 	export	WINE_STAGING_GIT_URI="https://github.com/wine-staging/wine-staging.git"
