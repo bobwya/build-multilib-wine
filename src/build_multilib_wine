@@ -2126,13 +2126,14 @@ schroot_image_bootstrap()
 	local -r	chroot_name="${1}" architecture="${2}"
 	local -r	lsb_description="$(lsb_release -sd)" \
 			chroot_path="/srv/chroot/${chroot_name}" \
+			schroot_conf_subdirectory="chroot.d" \
+			schroot_fstab_subdirectory="${chroot_name%_[36][24]bit}" \
 			schroot_main_conf_directory="/etc/schroot" \
 			dpkg_force_reinstall_conf="sudo apt-get install --reinstall -o Dpkg::Options::=\"--force-confask,confnew,confmiss\""
-	local -r	schroot_conf_subdirectory="${schroot_main_conf_directory}/chroot.d"
 	local 	path schroot_directory schroot_file
 
 	# Check for missing Schroot configuration directories and files (otherwise Schroot will nope out on us)...
-	for schroot_directory in "${schroot_main_conf_directory%/}"/{chroot.d,default,setup.d}; do
+	for schroot_directory in "${schroot_main_conf_directory}"/{chroot.d,default,setup.d}; do
 		[[ -d "${schroot_directory}" ]]	&& continue
 
 		printf "Please re-install the %sschroot%s package configuration files:\\n%s\\n%s\\n" \
@@ -2141,7 +2142,7 @@ schroot_image_bootstrap()
 				"${TTYCYAN_BOLD}${dpkg_force_reinstall_conf} \"$(dpkg -S \"${schroot_directory}\" | sed 's/,//g; s/:.*//')\"${TTYRESET}"
 		die "Schroot package misconfigured"
 	done
-	for schroot_file in "${schroot_main_conf_directory%/}"/{schroot.conf,/default/copyfiles}; do
+	for schroot_file in "${schroot_main_conf_directory}"/{schroot.conf,/default/copyfiles}; do
 		[[ -f "${schroot_file}" ]] 		&& continue
 
 		printf "Please re-install the %sschroot%s package configuration files:\\n%s\\n" \
@@ -2150,6 +2151,10 @@ schroot_image_bootstrap()
 		die "Schroot package misconfigured"
 	done
 
+	mkdir -p "${schroot_main_conf_directory}/${schroot_fstab_subdirectory}" || die "mkdir failed"
+	rsync -achv "${schroot_main_conf_directory}/default/fstab" "${schroot_main_conf_directory}/${schroot_fstab_subdirectory}/fstab" \
+		|| die "Cloning file: \"${schroot_main_conf_directory}/default/fstab\" ; to: \"${schroot_main_conf_directory}/${schroot_fstab_subdirectory}/fstab\" (rsync) failed"
+
 	case "${architecture}" in
 		i386)	(
 	cat <<EOF_Schroot_wine32
@@ -2157,14 +2162,14 @@ schroot_image_bootstrap()
 description=${lsb_description} (32-bit)
 personality=linux32
 EOF_Schroot_wine32
-				) > "${schroot_conf_subdirectory}/${chroot_name}.conf"
+				) > "${schroot_main_conf_directory}/${schroot_conf_subdirectory}/${chroot_name}.conf"
 			;;
 		amd64)	(
 	cat <<EOF_Schroot_wine64
 [${chroot_name}]
 description=${lsb_description} (64-bit)
 EOF_Schroot_wine64
-				) > "${schroot_conf_subdirectory}/${chroot_name}.conf"
+				) > "${schroot_main_conf_directory}/${schroot_conf_subdirectory}/${chroot_name}.conf"
 			;;
 		*)
 			die "Invalid Schroot architecture specified: '${architecture}' (specify: 'i386' or 'amd64')"
@@ -2172,6 +2177,7 @@ EOF_Schroot_wine64
 	esac
 	(
 		cat <<EOF_Schroot_wine
+setup.fstab=${schroot_fstab_subdirectory}/fstab
 directory=${chroot_path}
 message-verbosity=verbose
 root-users=root
@@ -2179,23 +2185,64 @@ type=directory
 users=${USERNAME}
 preserve-environment=true
 EOF_Schroot_wine
-	) >> "${schroot_conf_subdirectory}/${chroot_name}.conf"
+	) >> "${schroot_main_conf_directory}/${schroot_conf_subdirectory}/${chroot_name}.conf"
 
 	for path in "/etc"/{locale.gen,timezone} "/etc/default"/{console-setup,keyboard,locale}; do
 		# Append host locale & keyboard default configuration files to schroot copyfiles configuration file.
 		# sed command only appends file names - if not already present.
 		if [[ -f "${path}" ]]; then
 			sed -i -e "\\|${path}|h; \${x;s|${path}||;{g;t};a\\" -e "${path}" -e "}" \
-				"${schroot_main_conf_directory%/}/default/copyfiles" || die "sed failed"
+				"${schroot_main_conf_directory}/default/copyfiles" || die "sed failed"
 		else
 			sed -i "\\|${path}|d" \
-				"${schroot_main_conf_directory%/}/default/copyfiles" || die "sed failed"
+				"${schroot_main_conf_directory}/default/copyfiles" || die "sed failed"
 		fi
 	done
 	printf "%s" "${TTYPURPLE}"
 	# shellcheck disable=SC2153
 	debootstrap --variant=buildd --arch"=${architecture}" "${LSB_CODENAME}" \
 			"${chroot_path}" "${REPOSITORY_MIRROR_URI}"
+
+	if mountpoint "/home/${USERNAME}" &>/dev/null; then
+		sed -i -n 'p; s|/home[ ][ ]\{'"${#USERNAME}"'\}|/home/'"${USERNAME}"'|gp' \
+			"${schroot_main_conf_directory}/${schroot_fstab_subdirectory}/fstab"
+		mountpoint "/home" &>/dev/null || mkdir -p "${chroot_path}/home/${USERNAME}"
+	fi
+	
+	gawk -vfstab_file="${schroot_main_conf_directory}/${schroot_fstab_subdirectory}/fstab" \
+		'function is_mounted(mountpoint, self_mounts_array,
+				line) {
+			gsub("[ ].*$","",mountpoint)
+			for (line=1; line<=self_mounts_array[0]; ++line) {
+				if (mountpoint == self_mounts_array[line]) return 1
+			}
+			return 0
+		}
+
+		BEGIN{
+			while (getline fstab_line < fstab_file) {
+				fstab_array[++fstab_array[0]]=fstab_line
+			}
+			close(fstab_file)
+		}
+		{
+			if ($2 ~ "^/") self_mounts_array[++self_mounts_array[0]]=$2
+		}
+		END{
+			for (line=1; line<=fstab_array[0]; ++line) {
+				if ((fstab_array[line] !~ "^/") ||
+					is_mounted(fstab_array[line], self_mounts_array))
+					continue
+
+				sub("^","#",fstab_array[line])
+			}
+
+			printf("%s\n", fstab_array[1]) >fstab_file
+			for (line=2; line<=fstab_array[0]; ++line) {
+				printf("%s\n", fstab_array[line]) >>fstab_file
+			}
+		}' "/proc/self/mounts"
+
 	printf "%s" "${TTYRESET}"
 }
 
@@ -2274,10 +2321,10 @@ EOF_SOURCES_LIST
 
 	schroot_session_run "${session}" "root" "/" \
 		"dpkg --configure -a --force-confnew,confmiss" \
-		"apt-get install -y apt-utils locales" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" install -y apt-utils locales" \
 		"locale-gen ${locale_lang}" \
-		"apt-get update -qq -y" \
-		"apt-get upgrade -qq -y" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" update -qq -y" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" upgrade -qq -y" \
 		"rm -f \"/etc\"/{protocols,services,systemd/resolved.conf}" \
 		"dpkg-reconfigure --frontend=noninteractive locales" \
 		"update-locale LANG=${locale_lang}"
@@ -2310,15 +2357,15 @@ upgrade_chroot_build_env()
 	schroot_session_run "${session}" "root" "/" \
 		"dpkg --configure -a --force-confnew,confmiss" \
 		"rm -f \"/etc\"/{protocols,services}" \
-		"apt-get update -qq -y" \
-		"apt-get upgrade -qq -y" \
-		"apt-get install -qq -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev libsdl2-dev libvulkan-dev" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" update -qq -y" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" upgrade -qq -y" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" install -qq -y autoconf libva-dev libgtk-3-dev libudev-dev libgphoto2-dev libcapi20-dev libsane-dev libkrb5-dev libsdl2-dev libvulkan-dev" \
 		"rm -f \"/etc\"/{protocols,services}" \
 		"dpkg --configure -a --force-confnew,confmiss" \
 		"rm -f \"/etc/protocols\"" \
-		"apt-get build-dep -qq -y -f wine-development" \
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" build-dep -qq -y -f wine-development" \
 		"rm -f \"/etc\"/{protocols,services}" \
-		"apt-get upgrade -qq -y"
+		"apt-get -o Dpkg::Options::=\"--force-confnew\" upgrade -qq -y"
 	schroot_session_cleanup "${session}"
 }
 
@@ -3540,6 +3587,7 @@ function main()
 	set_lsb_distribution_id
 
 	# Global schroot constants
+	export		DEBIAN_FRONTEND="noninteractive"
 	export		CHROOT32_NAME="chroot:${LSB_CODENAME}_wine_32bit"
 	export		CHROOT64_NAME="chroot:${LSB_CODENAME}_wine_64bit"
 	export		SESSION_WINE_INITIALISE="session:wine_initialise"
