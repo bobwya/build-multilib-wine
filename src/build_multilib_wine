@@ -2503,35 +2503,7 @@ function src_prepare()
 	local	md5hash
 	md5hash="$(md5sum "${SOURCE_ROOT}/wine/server/protocol.def" || die "md5sum failed")"
 
-	# (1) Apply base (bundled) & working patches. Call 2 helper functions ...
-	local -a	array_patch_files=(
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.13-fix_build_with_newer_pcap.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-4.3-fix_build_with_newer_pcap.patch"
-	)
-	# shellcheck disable=SC2034
-	local -a	array_binpatch_files=(
-		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-implement_minimum_em_size_required_by_opentype_1.8.2.patch"
-	)
-
-	wine_fix_O3_compilation_support "${SOURCE_ROOT}/wine"
-	wine_fix_winegcc_support "${SOURCE_ROOT}/wine"
-
-	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
-	prune_commited_patches_from_arrays "${SOURCE_ROOT}/wine" array_patch_files array_binpatch_files
-	apply_patch_array "wine" array_patch_files[@]
-	apply_binpatch_array "wine" array_binpatch_files[@]
-
-	wine_winecfg_about_enhancement "${SOURCE_ROOT}/wine"
-	wine_fix_block_scope_compound_literals "${SOURCE_ROOT}/wine"
-
-	# (2) Apply Wine-Staging patchset ...
+	# (1) Apply Wine-Staging patchset ...
 	if ((WINE_STAGING)) && [[ -d "${SOURCE_ROOT}/wine-staging" ]]; then
 		(
 			local	staging_exclude
@@ -2568,6 +2540,35 @@ function src_prepare()
  		sed -r -i '/^AC_INIT\(.*\)$/{s/\[Wine\]/\[Wine \(Staging\)\]/}' "${SOURCE_ROOT}/wine/configure.ac" || die "sed failed" $?
 		sed -r -i "s/Wine (\\(Staging\\) |)/Wine \\(Staging\\) /" "${SOURCE_ROOT}/wine/VERSION" || die "sed failed" $?
 	fi
+
+	# (2) Apply base (bundled) & working patches. Call 2 helper functions ...
+	local -a	array_patch_files=(
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-disable_gnu_dirent.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.8-gstreamer-1.0_"{01,02,03,04,05,06,07,08,09,10,11}".patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.9-sysmacros.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.13-gnutls-3.5-compat.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-1.9.14-cups-2.2-cupsgetppd-build-fix.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.13-fix_build_with_newer_pcap.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-drop-glyphs.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-segfault.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.7-osmesa-configure_support_recent_versions.patch"
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-4.3-fix_build_with_newer_pcap.patch"
+	)
+	# shellcheck disable=SC2034
+	local -a	array_binpatch_files=(
+		"${SOURCE_ROOT}/${WINE_EBUILD_COMMON}/patches/wine-2.18-freetype-2.8.1-implement_minimum_em_size_required_by_opentype_1.8.2.patch"
+	)
+
+	wine_fix_O3_compilation_support "${SOURCE_ROOT}/wine"
+	wine_fix_winegcc_support "${SOURCE_ROOT}/wine"
+
+	mkdir -p "${WORKING_PATCHES_DIRECTORY}"
+	prune_commited_patches_from_arrays "${SOURCE_ROOT}/wine" array_patch_files array_binpatch_files
+	apply_patch_array "wine" array_patch_files[@]
+	apply_binpatch_array "wine" array_binpatch_files[@]
+
+	wine_winecfg_about_enhancement "${SOURCE_ROOT}/wine"
+	wine_fix_block_scope_compound_literals "${SOURCE_ROOT}/wine"
 
 	# (3) Apply user patches ...
 	apply_user_patches "wine"
@@ -3539,7 +3540,7 @@ function main()
 	export	WINE_STAGING_PREFIX="v"
 	export	WINE_STAGING_SUFFIX="-unofficial"
 	export	WINE_PREFIX="wine-"
-	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20200605"
+	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20200629"
 
 	# Global URI constants
 	export	WINE_STAGING_GIT_URI="https://github.com/wine-staging/wine-staging.git"
