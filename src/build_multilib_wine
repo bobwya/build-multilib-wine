@@ -299,6 +299,27 @@ function setup_tty_colours()
 # function pushd_wrapper()
 #
 # Parameters:
+#     1>  : command : test if command package is installed  (string)
+#
+# Description:
+#   Wrapper for dpkg-query utility, to test if the package, associated
+# with a command is installed.
+#
+function dpkg_query_wrapper()
+{
+	(($# == 1)) || die "Invalid parameter count: ${#} (1)"
+
+	local command="${1}"
+
+	dpkg-query -s "${command}" 2>/dev/null | \
+		gawk '{ if ($0 ~ "^Status:.*installed$") { installed=1 } }
+			  END{ exit !installed }'
+	return
+}
+
+# function pushd_wrapper()
+#
+# Parameters:
 #     1>  : directory : directory to pass to pushd  (string)
 #
 # Description:
@@ -507,32 +528,32 @@ function set_log_compression()
 	local compressor="${1}"
 	case "${compressor}" in
 		bzip2|bz2)
-			command -v bzip2 &>/dev/null || die "bzip2 log compression unsupported - bzip2 compressor not detected"
+			dpkg_query_wrapper bzip2 || die "bzip2 log compression unsupported - bzip2 compressor not detected"
 			export COMPRESSOR_CMD="bzip2 -fq -9"
 			;;
 		gzip|gz)
-			command -v gzip &>/dev/null || die "gzip log compression unsupported - gzip compressor not installed"
+			dpkg_query_wrapper gzip || die "gzip log compression unsupported - gzip compressor not installed"
 			export COMPRESSOR_CMD="gzip -fq -9"
 			;;
 		lzma)
-			if command -v lzma &>/dev/null; then
+			if dpkg_query_wrapper lzma &>/dev/null; then
 				export COMPRESSOR_CMD="lzma -fq"
-			elif command -v xz &>/dev/null; then
+			elif dpkg_query_wrapper xz &>/dev/null; then
 				export COMPRESSOR_CMD="xz --format=lzma -fq"
 			else
 				die "lzma log compression unsupported - neither of the lzma or xz compressors are installed"
 			fi
 			;;
 		lzop)
-			command -v lzop &>/dev/null || die "lzop log compression unsupported - lzop compressor not installed"
+			dpkg_query_wrapper lzop || die "lzop log compression unsupported - lzop compressor not installed"
 			export COMPRESSOR_CMD="lzop -fqU -9"
 			;;
 		lz4)
-			command -v lz4 &>/dev/null || die "lz4 log compression unsupported - lz4 compressor not installed"
+			dpkg_query_wrapper lz4 || die "lz4 log compression unsupported - lz4 compressor not installed"
 			export COMPRESSOR_CMD="lz4 -cfq -BD -9"
 			;;
 		xz)
-			command -v xz &>/dev/null || die "xz log compression unsupported - xz compressor not installed"
+			dpkg_query_wrapper xz || die "xz log compression unsupported - xz compressor not installed"
 			export COMPRESSOR_CMD="xz -fq"
 			;;
 		cat|none|no|disabled)
@@ -708,7 +729,7 @@ function check_package_dependencies()
 	(($# == 0)) || die "Invalid parameter count: ${#} (0)"
 
 	local -a array_executables=(
-		"bzip2" "debootstrap" "gawk" "git" "lsb_release" "md5sum" "mkfifo" "rsync" "schroot" "sed" "wget"
+		"bzip2" "coreutils" "debootstrap" "gawk" "git" "lsb-release" "rsync" "schroot" "sed" "wget"
 	)
 	local executable
 
@@ -718,14 +739,9 @@ function check_package_dependencies()
 	fi
 
 	for executable in "${array_executables[@]}"; do
-		command -v "${executable}" &>/dev/null &&	continue
+		dpkg_query_wrapper "${executable}" && 	continue
 
-		case "${executable}" in
-			md5sum|mkfifo)
-				package_list="${package_list} coreutils";;
-			*)
-				package_list="${package_list} ${executable}";;
-		esac
+		package_list="${package_list} ${executable}"
 	done
 	if [[ -n "${package_list}" ]]; then
 		printf "sudo apt-get install %s${package_list}%s\\n" "${TTYCYAN}" "${TTYRESET}" >&2
@@ -3622,9 +3638,9 @@ function main()
 	# shellcheck disable=SC2153
 	if [[ -n "${LOG_COMPRESSION}" ]]; then
 		set_log_compression "${LOG_COMPRESSION}"
-	elif command -v xz &>/dev/null; then
+	elif dpkg_query_wrapper xz &>/dev/null; then
 		set_log_compression "xz"
-	elif command -v gzip &>/dev/null; then
+	elif dpkg_query_wrapper gzip &>/dev/null; then
 		set_log_compression "gzip"
 	else
 		set_log_compression "none"
