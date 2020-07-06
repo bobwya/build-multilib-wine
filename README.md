@@ -5,6 +5,7 @@
 
 Download and install the latest release version tarball:
 ```
+    sudo apt-get install wget
     export release_tag
     cd ~/Downloads
     wget 'https://github.com/bobwya/build-multilib-wine/releases/latest' -O 'build-multilib-wine.release.json'
