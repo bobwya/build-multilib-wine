@@ -731,22 +731,34 @@ function check_package_dependencies()
 	local -a array_executables=(
 		"bzip2" "coreutils" "debootstrap" "gawk" "git" "lsb-release" "rsync" "schroot" "sed" "wget"
 	)
-	local executable
+	local executable netselect_apt=0
 
 	if [[ "${LSB_DISTRIBUTION_ID}" == "debian" ]]; then
 		array_executables+=("netselect-apt")
 		export PATH="/usr/local/sbin:/usr/sbin:/sbin:${PATH}"
+	else
+		array_executables+=("netselect")
 	fi
 
 	for executable in "${array_executables[@]}"; do
 		dpkg_query_wrapper "${executable}" && 	continue
 
-		package_list="${package_list} ${executable}"
+		if [[ "${executable}" == "netselect" ]]; then
+			netselect_apt=1
+		else
+			package_list="${package_list} ${executable}"
+		fi
 	done
 	if [[ -n "${package_list}" ]]; then
 		printf "sudo apt-get install %s${package_list}%s\\n" "${TTYCYAN}" "${TTYRESET}" >&2
 	fi
-	[[ -z "${package_list}" ]] || die "please install the (above) required package(s) and re-run this script"
+	if ((netselect_apt)); then
+		printf "wget ftp.us.debian.org/debian/pool/main/n/netselect/%s\\n" "${DEBIAN_NETSELECT_PACKAGE}" >&2
+		printf "sudo dpkg -i %s%s%s\\n" "${TTYCYAN}" "${DEBIAN_NETSELECT_PACKAGE}" "${TTYRESET}" >&2
+	fi
+	if [[ -n "${package_list}" ]] || ((netselect_apt)); then
+		die "please install the (above) required package(s) and re-run this script"
+	fi
 }
 
 # function usage_information()
@@ -1858,14 +1870,8 @@ function install_wine_addon()
 #   [ 1<  __repository_mirror_reference  : fastest local repository mirror URI   (string, reference) ]
 #
 # Description:
-#	The function uses the Debian netselect-apt utility, or the Ubuntu mirror.txt facility,
-#   to get a list of the top local mirrors. The Release hashes list - for the
-#   Debian/Ubuntu release to be built - is downloaded from each of these mirrors. Since this
-#   will need to be downloaded anyway - we can also eliminate any broken mirrors.
-#   The download of the Release file is timed. The fastest mirror, of the top mirror list,
-#   is selected using this time metric.
-#   The best repository mirror URI is cached, for 24 hours, to speed up subsequent calls to this
-#   function.
+#	The function uses the netselect-apt utility (Debian), or the netselect utility (Ubuntu),
+#   to get the optimal local repository mirror URI.
 #   If the reference argument: __repository_mirror_reference ; is set then return the
 #   repository mirror URI via this, otherwise output it to stdout.
 #
@@ -1873,72 +1879,45 @@ get_optimum_repository_mirror()
 {
 	(($# <= 1)) || die "Invalid parameter count: ${#} (0-1)"
 
-	local -r	__ubuntu_mirror_list="mirrors.ubuntu.com/mirrors.txt" \
-				__repository_mirror_file="${LSB_DISTRIBUTION_ID}_mirror"
+	local -r	__ubuntu_mirror_list="mirrors.ubuntu.com/mirrors.txt"
 	local	__repository_mirror_reference="${1}" \
-			__best_repository_mirror __best_repository_mirror_uri \
-			__download_time __i=0 __i_best=0 __minimum_download_time \
-			__modification_time __now_time \
-			__repository_mirror_list __repository_mirror \
-			__test_file_relpath
-	local -a	__repository_mirror_array
+			__best_repository_mirror __lsb_release __repository_mirror_list
 
 	if [[ "${LSB_DISTRIBUTION_ID}" == "debian" ]]; then
-		__test_file_relpath="dists/${LSB_CODENAME}/Release"
-		__repository_mirror_list="$(
-			netselect-apt "${LSB_CODENAME}" 2>/dev/null \
-				| gawk '{ if ($1~"^(https{0,1}|ftp):") { print $1 } }'
+		case "${LSB_CODENAME}" in
+			bullseye)
+				__lsb_release="testing";;
+			buster)
+				__lsb_release="stable";;
+			*)
+				__lsb_release="${LSB_CODENAME}";;
+		esac
+
+		__best_repository_mirror="$(
+			netselect-apt -t 1 -s stable -o /dev/null "${__lsb_release}" 2>&1 | \
+			awk '{
+				print $0 >"/dev/stderr"
+				if ($0 ~ "The fastest server seems to be:")
+					server=1
+				if (server && ($0 ~ "(ftp|https{0,1})://")) {
+					while ($(++field) == "") {}
+					print $field
+					exit 0 
+				}
+			}'
 		)"
 	else
-		__test_file_relpath="ubuntu/dists/${LSB_CODENAME}/Release"
 		__repository_mirror_list="$(wget -qO - "${__ubuntu_mirror_list}")"
+		__best_repository_mirror="$(
+			# shellcheck disable=SC2086
+			netselect -s 1 -t 50 -m 64 ${__repository_mirror_list} | \
+			awk '{ print $2 }'
+		)"
 	fi
-	# shellcheck disable=SC2206
-	__repository_mirror_array=( ${__repository_mirror_list} )
-	__temp_file="$(mktemp)"
-	# try to use a cached mirror - if it's not too out-of-date (>1 day)...
-	if [[ -f "${SCRIPT_CACHE_DIRECTORY%/}/${__repository_mirror_file}" ]]; then
-		__modification_time="$(stat -c%Y "${SCRIPT_CACHE_DIRECTORY%/}/${__repository_mirror_file}")"
-		__now_time="$(date -d now +%s)"
-		if ((__now_time - __modification_time < 3600*24)); then
-			__best_repository_mirror="$(cat "${SCRIPT_CACHE_DIRECTORY%/}/${__repository_mirror_file}")"
-			__best_repository_mirror_uri="${__best_repository_mirror#*//}"
-			__best_repository_mirror_uri="${__best_repository_mirror_uri%/${LSB_DISTRIBUTION_ID}/}"
-			ping -qq -w5 -c1 "${__best_repository_mirror_uri}" >/dev/null \
-				|| unset -v __best_repository_mirror
-		fi
-	fi
+
 	if [[ -z "${__best_repository_mirror}" ]]; then
-		for __repository_mirror in "${__repository_mirror_array[@]}"; do
-			: $((++__i))
-			rm -f "${__temp_file}" &>/dev/null
-			if __download_time="$(
-				env time -f '%e' wget -t 1 -T 4 -qO "${__temp_file}" "${__repository_mirror}/${__test_file_relpath}" 2>&1 \
-					| gawk '{ if ($0 ~ "^[.[:digit:]]+$") { printf("%.0f\n", ($0*1000)) } else { exit 1 } }'
-			)"; then
-				printf "[%02d] %s mirror: %s (%d ms)\\n" \
-						"$((__i))" "${LSB_DISTRIBUTION_ID^}" "${__repository_mirror}" "$((__download_time))"
-			else
-				printf "[%02d] %s mirror: %s (timeout)\\n" \
-						"$((__i))" "${LSB_DISTRIBUTION_ID^}" "${__repository_mirror}"
-				continue
-			fi
-
-			if ((!__i_best || (__download_time < __minimum_download_time))); then
-				__i_best="$((__i))"
-				__best_repository_mirror="${__repository_mirror}"
-				__minimum_download_time="$((__download_time))"
-			fi
-		done
-		echo "${__best_repository_mirror}" >"${SCRIPT_CACHE_DIRECTORY%/}/${__repository_mirror_file}"
-		printf "\\n[%02d] Using best %s mirror: %s (%d ms)\\n" \
-			"$((__i_best))" "${LSB_DISTRIBUTION_ID^}" "${__best_repository_mirror}" "$((__minimum_download_time))"
-	else
-		printf "\\nUsing best %s mirror: %s (cached)\\n" \
-			"${LSB_DISTRIBUTION_ID^}" "${__best_repository_mirror}"
+		die "netselect failed to determine best repository mirror"
 	fi
-
-
 
 	if [[ -z "${__repository_mirror_reference}" ]]; then
 		echo "${__best_repository_mirror}"
@@ -2270,8 +2249,8 @@ EOF_Schroot_wine
 # Description:
 #   This function initally ensures that the chroot environment has a valid
 #   locale set - using either: the Host System locale or fall-back of 'en_US.UTF-8'.
-#   We then setup a minimal repository list, using our previously determined
-#   Debian / Ubuntu mirror URI (REPOSITORY_MIRROR_URI), within the chroot environment.
+#   We then install a minimal repository list, using our previously generated
+#   'sources.list' file, within the chroot environment.
 #   A base-minimal package is chosen, depending on the Linux Distribution
 #   (Debian / Ubuntu).
 #   We then start Schroot, as root. Next we run the Schroot, installing a base set
@@ -3559,6 +3538,7 @@ function main()
 	export	GENTOO_WINE_EBUILD_COMMON_PACKAGE_VERSION="20200629"
 
 	# Global URI constants
+	export	DEBIAN_NETSELECT_PACKAGE="netselect_0.3.ds1-28+b1_amd64.deb"
 	export	WINE_STAGING_GIT_URI="https://github.com/wine-staging/wine-staging.git"
 	export	WINE_GIT_URI="git://source.winehq.org/git/wine.git"
 	export	WINE_ADDON_URI="http://dl.winehq.org/wine/"
