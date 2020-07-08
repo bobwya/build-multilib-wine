@@ -1978,7 +1978,8 @@ function fetch_wine_addon()
 	wine_addon_uri="${WINE_ADDON_URI%/}/wine-${wine_addon}/${wine_addon_version}"
 
 	rm -f "${wine_addon_file_list}"  &>/dev/null
-	for arch in "${arch_array[@]}"; do
+	# shellcheck disable=SC2068
+	for arch in ${arch_array[@]}; do
 		((arch == 32)) 		&& arch_suffix="x86"
 		((arch == 64)) 		&& arch_suffix="x86_64"
 		((no_arch_suffix))	&& arch_suffix=""
