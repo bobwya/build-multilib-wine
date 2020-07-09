@@ -533,32 +533,32 @@ function set_log_compression()
 	local compressor="${1}"
 	case "${compressor}" in
 		bzip2|bz2)
-			dpkg_query_wrapper bzip2 || die "bzip2 log compression unsupported - bzip2 compressor not detected"
+			dpkg_query_wrapper 'bzip2' || die "bzip2 log compression unsupported - bzip2 compressor not detected"
 			export COMPRESSOR_CMD="bzip2 -fq -9"
 			;;
 		gzip|gz)
-			dpkg_query_wrapper gzip || die "gzip log compression unsupported - gzip compressor not installed"
+			dpkg_query_wrapper 'gzip' || die "gzip log compression unsupported - gzip compressor not installed"
 			export COMPRESSOR_CMD="gzip -fq -9"
 			;;
 		lzma)
-			if dpkg_query_wrapper lzma &>/dev/null; then
+			if dpkg_query_wrapper 'lzma' &>/dev/null; then
 				export COMPRESSOR_CMD="lzma -fq"
-			elif dpkg_query_wrapper xz &>/dev/null; then
+			elif dpkg_query_wrapper 'xz-utils' &>/dev/null; then
 				export COMPRESSOR_CMD="xz --format=lzma -fq"
 			else
 				die "lzma log compression unsupported - neither of the lzma or xz compressors are installed"
 			fi
 			;;
 		lzop)
-			dpkg_query_wrapper lzop || die "lzop log compression unsupported - lzop compressor not installed"
+			dpkg_query_wrapper 'lzop' || die "lzop log compression unsupported - lzop compressor not installed"
 			export COMPRESSOR_CMD="lzop -fqU -9"
 			;;
 		lz4)
-			dpkg_query_wrapper lz4 || die "lz4 log compression unsupported - lz4 compressor not installed"
+			dpkg_query_wrapper 'lz4' || die "lz4 log compression unsupported - lz4 compressor not installed"
 			export COMPRESSOR_CMD="lz4 -cfq -BD -9"
 			;;
 		xz)
-			dpkg_query_wrapper xz || die "xz log compression unsupported - xz compressor not installed"
+			dpkg_query_wrapper 'xz-utils' || die "xz log compression unsupported - xz compressor not installed"
 			export COMPRESSOR_CMD="xz -fq"
 			;;
 		cat|none|no|disabled)
