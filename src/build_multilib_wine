@@ -312,8 +312,13 @@ function dpkg_query_wrapper()
 	local command="${1}"
 
 	dpkg-query -s "${command}" 2>/dev/null | \
-		gawk '{ if ($0 ~ "^Status:.*installed$") { installed=1 } }
-			  END{ exit !installed }'
+		gawk '{
+				if ($0 ~ "^Status:.*installed$")
+					installed=1
+		}
+		END{
+			exit !installed
+		}'
 	return
 }
 
