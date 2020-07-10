@@ -2255,8 +2255,8 @@ EOF_Schroot_wine
 # Description:
 #   This function initally ensures that the chroot environment has a valid
 #   locale set - using either: the Host System locale or fall-back of 'en_US.UTF-8'.
-#   We then install a minimal repository list, using our previously generated
-#   'sources.list' file, within the chroot environment.
+#   We then setup a minimal repository sources.list, using our previously determined
+#   Debian / Ubuntu mirror URI (REPOSITORY_MIRROR_URI), within the chroot environment.
 #   A base-minimal package is chosen, depending on the Linux Distribution
 #   (Debian / Ubuntu).
 #   We then start Schroot, as root. Next we run the Schroot, installing a base set
@@ -3264,22 +3264,22 @@ function execute_commands()
 # WINE_STAGING=${wine_staging_enabled} # default
 #
 # Wine version to build.
-# WINE_VERSION="4.11"
+# WINE_VERSION="5.12"
 #
 # Git branch of Wine to build (WINE_STAGING=no).
-# WINE_BRANCH="refs/heads/master"
+# WINE_BRANCH="origin/master"
 #
 # Git commit (SHA-1 hash) of Wine to build (WINE_STAGING=no).
 # WINE_COMMIT=""
 #
 # Git branch of Wine-Staging to build (WINE_STAGING=yes).
-# WINE_STAGING_BRANCH="refs/heads/master"
+# WINE_STAGING_BRANCH="origin/master"
 #
 # Git commit (SHA-1 hash) of Wine-Staging to build (WINE_STAGING=yes).
 # WINE_STAGING_COMMIT=""
 #
 # Wine-Staging version to build.
-# WINE_STAGING_VERSION="4.11"
+# WINE_STAGING_VERSION="5.12"
 #
 # Logging
 #
@@ -3463,7 +3463,7 @@ function main()
 {
 	export		BUILD_MULTILIB_WINE_VERSION SCRIPT_DIRECTORY SCRIPT_NAME SCRIPT_PID SCRIPT_PATH
 
-	BUILD_MULTILIB_WINE_VERSION="20190605"
+	BUILD_MULTILIB_WINE_VERSION="20200710"
 	SCRIPT_PID=$$
 	SCRIPT_PATH="$(readlink -f "${0}")"
 	SCRIPT_DIRECTORY="$(dirname "${SCRIPT_PATH}")"
@@ -3624,9 +3624,9 @@ function main()
 	# shellcheck disable=SC2153
 	if [[ -n "${LOG_COMPRESSION}" ]]; then
 		set_log_compression "${LOG_COMPRESSION}"
-	elif dpkg_query_wrapper xz &>/dev/null; then
+	elif dpkg_query_wrapper 'xz-utils' &>/dev/null; then
 		set_log_compression "xz"
-	elif dpkg_query_wrapper gzip &>/dev/null; then
+	elif dpkg_query_wrapper 'gzip' &>/dev/null; then
 		set_log_compression "gzip"
 	else
 		set_log_compression "none"
