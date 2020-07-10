@@ -1110,7 +1110,7 @@ function git_pull()
 	git checkout "master" || die "git checkout \"master\" failed (\"${1}\")" $?
 	git clean -xdfq || die "git clean -xdfq failed (\"${1}\")" $?
 	git reset --hard "origin/master"  || die "git reset --hard \"master\" failed (\"${1}\")" $?
-	git pull || die "git pull failed (\"${1}\")" $?
+	git pull --force || die "git pull --force failed (\"${1}\")" $?
 	popd_wrapper
 }
 
